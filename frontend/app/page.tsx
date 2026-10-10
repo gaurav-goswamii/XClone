@@ -1,69 +1,83 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-black text-[#e7e9ea] flex flex-col justify-between selection:bg-[#1d9bf0]/30 selection:text-white">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col lg:flex-row items-center justify-center lg:justify-between px-6 sm:px-12 md:px-24 py-8 max-w-7xl mx-auto w-full">
+        {/* Left Side: Large X Logo */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center py-8 lg:py-16">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="w-20 h-20 sm:w-48 sm:h-48 lg:w-80 lg:h-80 fill-[#eff3f4]"
+          >
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+          </svg>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Right Side: Headlines & Auth Actions */}
+        <div className="w-full lg:w-1/2 flex flex-col items-start lg:pl-12">
+          <h1 className="text-[42px] sm:text-[58px] lg:text-[68px] font-extrabold tracking-tight text-[#eff3f4] leading-tight mb-8">
+            Happening now
+          </h1>
+
+          <h2 className="text-[24px] sm:text-[32px] font-bold text-[#eff3f4] mb-8">
+            Join today.
+          </h2>
+
+          <div className="w-full max-w-[320px] flex flex-col gap-3">
+            {/* Create Account Button */}
+            <Link
+              href="/signup"
+              className="w-full h-[44px] rounded-full bg-[#1d9bf0] hover:bg-[#1a8cd8] active:bg-[#177cc0] text-white font-bold text-[15px] flex items-center justify-center transition duration-200 shadow-md"
+            >
+              Create account
+            </Link>
+
+            <p className="text-[11px] text-[#71767b] leading-3.5 mb-6">
+              By signing up, you agree to the{" "}
+              <span className="text-[#1d9bf0] hover:underline cursor-pointer">Terms of Service</span> and{" "}
+              <span className="text-[#1d9bf0] hover:underline cursor-pointer">Privacy Policy</span>, including{" "}
+              <span className="text-[#1d9bf0] hover:underline cursor-pointer">Cookie Use</span>.
+            </p>
+
+            <div className="mt-4">
+              <h3 className="text-[17px] font-bold text-[#eff3f4] mb-3">
+                Already have an account?
+              </h3>
+              <Link
+                href="/login"
+                className="w-full h-[44px] rounded-full border border-[#536471] hover:bg-[#eff3f4]/10 active:bg-[#eff3f4]/20 text-[#1d9bf0] font-bold text-[15px] flex items-center justify-center transition duration-200"
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
+
+      {/* Footer Nav Links */}
+      <footer className="py-4 px-6 text-center text-[12px] text-[#71767b] flex flex-wrap justify-center gap-x-4 gap-y-2 border-t border-[#2f3336]">
+        <span className="hover:underline cursor-pointer">About</span>
+        <span className="hover:underline cursor-pointer">Download the X app</span>
+        <span className="hover:underline cursor-pointer">Help Center</span>
+        <span className="hover:underline cursor-pointer">Terms of Service</span>
+        <span className="hover:underline cursor-pointer">Privacy Policy</span>
+        <span className="hover:underline cursor-pointer">Cookie Policy</span>
+        <span className="hover:underline cursor-pointer">Accessibility</span>
+        <span className="hover:underline cursor-pointer">Ads info</span>
+        <span className="hover:underline cursor-pointer">Blog</span>
+        <span className="hover:underline cursor-pointer">Careers</span>
+        <span className="hover:underline cursor-pointer">Brand Resources</span>
+        <span className="hover:underline cursor-pointer">Advertising</span>
+        <span className="hover:underline cursor-pointer">Marketing</span>
+        <span className="hover:underline cursor-pointer">X for Business</span>
+        <span className="hover:underline cursor-pointer">Developers</span>
+        <span>© 2026 X Corp.</span>
+      </footer>
     </div>
   );
 }

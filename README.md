@@ -1,47 +1,75 @@
 # XClone
 
-A modern full-stack social media application (Twitter / X clone) built with a Next.js frontend and a Go (Golang) backend following clean, layered architectural principles.
+A modern, high-performance full-stack social media platform (Twitter / X clone) built with a **Next.js 16** App Router frontend and a modular, clean-architecture **Go (Golang)** backend.
 
 ---
 
 ## 📁 Project Architecture & Directory Structure
 
-The repository is organized into distinct `frontend` and `backend` workspaces:
+The repository is structured as a monorepo separating the Next.js client from the Go API server:
 
 ```
 XClone/
-├── frontend/                     # Next.js 16 Client Application
-│   ├── app/                      # Next.js App Router (pages, layouts, globals)
-│   ├── public/                   # Static assets (SVGs, icons)
-│   ├── .gitignore                # Frontend-specific ignore rules
-│   ├── eslint.config.mjs         # ESLint configuration
-│   ├── next.config.ts            # Next.js configuration
-│   ├── package.json              # Frontend npm dependencies & scripts
-│   ├── postcss.config.mjs        # PostCSS configuration
-│   └── tsconfig.json             # TypeScript compiler configuration
+├── frontend/                               # Next.js 16 Client Application
+│   ├── app/                                # Next.js App Router
+│   │   ├── [username]/                     # Dynamic user profile page
+│   │   │   └── page.tsx
+│   │   ├── dashboard/                      # Main feed and tweet timeline
+│   │   │   └── page.tsx
+│   │   ├── login/                          # User login page
+│   │   │   └── page.tsx
+│   │   ├── signup/                         # User onboarding and registration
+│   │   │   └── page.tsx
+│   │   ├── favicon.ico                     # Application favicon
+│   │   ├── globals.css                     # Global styles & design tokens
+│   │   ├── layout.tsx                      # Root layout wrapper
+│   │   └── page.tsx                        # Landing / welcome page
+│   ├── components/                         # Modular UI Components
+│   │   ├── navigation/                     # Navigation bars & account popovers
+│   │   │   ├── AccountPill.tsx             # Floating user badge in sidebar
+│   │   │   └── AccountPopover.tsx          # Logout & account switch dropdown
+│   │   ├── profile/                        # User profile components
+│   │   │   └── EditProfileModal.tsx        # Profile editing modal (Avatar, Banner, Bio)
+│   │   └── ui/                             # Shared atomic components
+│   │       └── UserAvatar.tsx              # Fallback-aware avatar component
+│   ├── proxy.ts                            # Next.js route protection & auth proxy
+│   ├── eslint.config.mjs                   # ESLint configuration (React 19 rules)
+│   ├── next.config.ts                      # Next.js config with remote image domains
+│   ├── package.json                        # Dependencies & build scripts
+│   ├── postcss.config.mjs                  # PostCSS configuration
+│   └── tsconfig.json                       # TypeScript compiler configuration
 │
-├── backend/                      # Go (Golang) API Server
-│   ├── config/                   # Configuration loader & environment variables
+├── backend/                                # Go (Golang) REST API Server
+│   ├── config/                             # Environment parser & server configuration
 │   │   └── config.go
-│   ├── controllers/              # HTTP request handlers & API response formatters
-│   │   └── controller.go
-│   ├── middleware/               # HTTP middlewares (CORS, request logging, auth)
-│   │   └── middleware.go
-│   ├── models/                   # Core domain data models (User, Post)
-│   │   └── model.go
-│   ├── repository/               # Data access layer & database interfaces
-│   │   └── repository.go
-│   ├── routes/                   # HTTP routing setup & route registration
-│   │   └── routes.go
-│   ├── service/                  # Business logic layer
-│   │   └── service.go
-│   ├── utils/                    # Helper utilities (token generation, hashing)
-│   │   └── utils.go
-│   ├── go.mod                    # Go module definition
-│   └── main.go                   # Backend server entrypoint
+│   ├── controllers/                        # HTTP controllers & request handlers
+│   │   ├── auth_controller.go              # Register, Login, Me, Logout, Profile handlers
+│   │   ├── upload_controller.go            # Media & Cloudinary image upload handlers
+│   │   └── controller.go                   # Health check & base controllers
+│   ├── database/                           # Database connection & schema setup
+│   │   └── postgres.go                     # PostgreSQL pooling & table migrations
+│   ├── middleware/                         # HTTP middleware stack
+│   │   └── middleware.go                   # CORS, Structured Logger, JWT Authentication
+│   ├── models/                             # Domain models & entities
+│   │   └── model.go                        # User & Post data structures
+│   ├── repository/                         # Persistence abstraction layer
+│   │   ├── repository.go                   # UserRepository interface definition
+│   │   ├── postgres_repo.go                # PostgreSQL SQL implementation
+│   │   └── memory_repo.go                  # Thread-safe in-memory fallback implementation
+│   ├── routes/                             # Route definitions & router setup
+│   │   └── routes.go                       # Route registration & dependency injection
+│   ├── service/                            # Core business logic layer
+│   │   ├── auth_service.go                 # Registration, login, validation & hashing
+│   │   └── service.go                      # Base service interfaces
+│   ├── utils/                              # Cryptographic & utility helpers
+│   │   ├── auth.go                         # JWT token creation, parsing & validation
+│   │   └── utils.go                        # Utility helpers
+│   ├── go.mod                              # Go module specifications
+│   ├── go.sum                              # Go dependency checksums
+│   └── main.go                             # Backend server initialization & entrypoint
 │
-├── .gitignore                    # Root git ignore rules
-└── README.md                     # Project documentation
+├── .gitignore                              # Root git ignore rules
+└── README.md                               # Project documentation
 ```
 
 ---
@@ -52,90 +80,156 @@ XClone/
 - **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
 - **UI Library**: [React 19](https://react.dev/)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Linting**: [ESLint](https://eslint.org/)
+- **State & Route Guards**: Next.js Proxy/Middleware with JWT cookie evaluation
 
 ### Backend
 - **Language**: [Go (Golang 1.23+)](https://go.dev/)
-- **Architecture**: Layered / Clean Architecture
-  - **`config`**: Environment parsing with fallback defaults
-  - **`controllers`**: Parses HTTP inputs and writes JSON responses
-  - **`middleware`**: Reusable HTTP handlers (CORS, Logger, JWT Auth)
-  - **`models`**: Data structures defining the domain (Users, Tweets/Posts)
-  - **`repository`**: Database interaction interfaces
-  - **`routes`**: Routing configuration mapping URLs to controllers
-  - **`service`**: Core application logic and validation
-  - **`utils`**: Cryptographic tokens and utility helpers
-  - **`main.go`**: Service initialization, config loading, and server listening
+- **Architecture**: Clean / Layered Architecture (`Controller` -> `Service` -> `Repository`)
+- **Database**: PostgreSQL (with automated schema migration) and In-Memory fallback
+- **Authentication**: JWT (`golang-jwt/jwt/v5`) stored in HTTP-only secure cookies
+- **Password Hashing**: `golang.org/x/crypto/bcrypt`
+- **Cloud Storage**: Cloudinary Go SDK for media uploads
+- **Router**: Go standard library `http.ServeMux` with modular middleware chaining
 
 ---
 
-## 🚀 Getting Started
+## ✨ Features
 
-### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm**: v9.0.0 or higher
-- **Go**: v1.23.0 or higher
-
----
-
-### 1. Frontend Setup
-
-Navigate to the `frontend` folder, install dependencies, and start the development server:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
-
-#### Frontend Scripts
-- `npm run dev` - Start the development server with Turbopack
-- `npm run build` - Create an optimized production build
-- `npm run start` - Start the production server
-- `npm run lint` - Run ESLint checks
+- 🔐 **Robust Authentication**:
+  - Full registration workflow validating name, username, email, password strength, and birthdate.
+  - Secure login issuing signed JWT tokens inside `HttpOnly`, `SameSite=Lax` cookies (`x_auth_token`).
+  - Active session endpoint (`/api/auth/me`) with automatic validation on window focus.
+  - Safe logout clearing session cookies.
+- 🛡️ **Edge Route Protection**:
+  - Next.js Proxy middleware automatically redirects unauthenticated users trying to visit `/dashboard` to `/login`.
+  - Automatically redirects authenticated users away from `/login` or `/signup` directly to `/dashboard`.
+- 👤 **User Profiles & Customization**:
+  - Dynamic user profile routes (`/[username]`).
+  - Full profile editing modal supporting custom display names, bios, avatars, and banner images.
+  - Fallback-safe avatar rendering with first-letter fallback badges.
+  - Interactive profile tabs: Posts, Replies, Highlights, Media, and Likes.
+- 📱 **Interactive Dashboard & Timeline**:
+  - Responsive 3-column Twitter/X layout (Left navigation, Main tweet timeline, Right widgets).
+  - Tweet composer with character counter, media upload buttons, and post actions.
+  - Trending topics and "Who to follow" sidebar widgets.
+- 🗄️ **Dual Persistence Layer**:
+  - Production-ready PostgreSQL storage with parameterized queries.
+  - Zero-dependency in-memory repository fallback for fast testing and offline development.
 
 ---
 
-### 2. Backend Setup
+## 📡 API Endpoints
 
-Navigate to the `backend` folder and start the API server:
+### Authentication & Users
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/api/auth/register` | Register a new user account | No |
+| `POST` | `/api/auth/login` | Authenticate user & issue session cookie | No |
+| `POST` | `/api/auth/logout` | Invalidate session & clear auth cookie | Yes |
+| `GET` | `/api/auth/me` | Fetch currently authenticated user session | Yes |
+| `GET` | `/api/users/profile` | Retrieve public profile by `?username=` | No |
+| `PUT` | `/api/users/profile` | Update profile (name, bio, avatar, banner) | Yes |
 
-```bash
-cd backend
-go run main.go
-```
-
-The server will start on [http://localhost:8080](http://localhost:8080).
-
-#### Test the Backend Health Check
-```bash
-curl http://localhost:8080/api/health
-```
-
-Expected response:
-```json
-{"status":"ok","service":"xclone-backend"}
-```
+### Media & System
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/api/upload/image` | Upload an image asset to Cloudinary | Yes |
+| `GET` | `/api/health` | Health check probe endpoint | No |
 
 ---
 
 ## ⚙️ Environment Configuration
 
-### Backend (`backend/.env`)
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `8080` | Port for the Go backend server |
-| `ENV` | `development` | Runtime environment (`development` / `production`) |
-| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/xclone?sslmode=disable` | Database connection string |
-| `JWT_SECRET` | `xclone-super-secret-key` | Secret key used for signing JWT tokens |
+### Backend Configuration (`backend/.env`)
+Create a `.env` file in the `backend/` folder:
 
-### Frontend (`frontend/.env.local`)
-| Variable | Default | Description |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | Base URL pointing to the Go backend API |
+```env
+PORT=8080
+ENV=development
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/xclone?sslmode=disable
+JWT_SECRET=your-secure-jwt-secret-key
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+CLOUDINARY_UPLOAD_FOLDER=xclone
+```
+
+> [!NOTE]
+> If `DATABASE_URL` is omitted or PostgreSQL is unreachable, the backend gracefully falls back to the thread-safe `MemoryUserRepository` for local development.
+
+### Frontend Configuration (`frontend/.env.local`)
+Create a `.env.local` file in the `frontend/` folder:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+- **Go**: v1.23.0 or higher
+- **PostgreSQL**: (Optional for local memory mode)
+
+---
+
+### 2. Backend Setup
+
+```bash
+cd backend
+
+# Verify and download dependencies
+go mod download
+
+# Start the Go API server
+go run main.go
+```
+
+The server listens on `http://localhost:8080`.
+
+Verify health check:
+```bash
+curl http://localhost:8080/api/health
+```
+
+---
+
+### 3. Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start the Next.js development server
+npm run dev
+```
+
+The frontend application runs on `http://localhost:3000`.
+
+---
+
+## 🧪 Quality Assurance & Pre-commit Verification
+
+Before submitting changes, run the test suites and linters:
+
+```bash
+# Verify backend Go code
+cd backend
+go vet ./...
+go build -o /dev/null ./...
+
+# Verify frontend Next.js code
+cd ../frontend
+npm run lint
+npm run build
+```
 
 ---
 
