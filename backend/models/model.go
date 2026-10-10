@@ -4,14 +4,25 @@ import "time"
 
 // User represents a user in the XClone platform
 type User struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Name      string    `json:"name"`
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	Name         string    `json:"name"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
+	BirthDate    string    `json:"birth_date"`
+	AvatarURL    string    `json:"avatar_url"`
+	Bio          string    `json:"bio"`
+	IsVerified   bool      `json:"is_verified"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// VerificationRecord stores pending OTP verification state
+type VerificationRecord struct {
 	Email     string    `json:"email"`
-	AvatarURL string    `json:"avatar_url"`
-	Bio       string    `json:"bio"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Attempts  int       `json:"attempts"`
 }
 
 // Post represents a post/tweet in the XClone platform
