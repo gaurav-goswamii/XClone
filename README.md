@@ -125,17 +125,18 @@ XClone/
 ### Authentication & Users
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/auth/register` | Register a new user account | No |
+| `POST` | `/api/auth/signup` | Register a new user account | No |
 | `POST` | `/api/auth/login` | Authenticate user & issue session cookie | No |
 | `POST` | `/api/auth/logout` | Invalidate session & clear auth cookie | Yes |
-| `GET` | `/api/auth/me` | Fetch currently authenticated user session | Yes |
-| `GET` | `/api/users/profile` | Retrieve public profile by `?username=` | No |
-| `PUT` | `/api/users/profile` | Update profile (name, bio, avatar, banner) | Yes |
+| `GET` | `/api/auth/check-username` | Check availability of a username (`?username=`) | No |
+| `GET` | `/api/auth/me` | Fetch currently authenticated user session via cookie | Yes |
+| `GET` | `/api/users/:username` | Retrieve public user profile by username or `?username=` | No |
+| `PUT` / `PATCH` | `/api/users/profile` | Update profile (name, bio, avatar) | Yes |
 
 ### Media & System
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/upload/image` | Upload an image asset to Cloudinary | Yes |
+| `POST` | `/api/upload/avatar` | Upload an avatar image to Cloudinary (multipart form) | Yes |
 | `GET` | `/api/health` | Health check probe endpoint | No |
 
 ---

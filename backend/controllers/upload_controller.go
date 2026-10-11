@@ -1,15 +1,15 @@
 package controllers
 
 import (
+	"backend/utils"
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/cloudinary/cloudinary-go/v2"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"io"
 	"net/http"
 	"time"
-	"backend/utils"
-	"github.com/cloudinary/cloudinary-go/v2"
-	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 )
 
 // a structure to upload image
@@ -34,7 +34,7 @@ func NewUploadController(cloudName, apiKey, apiSecret, uploadFolder, jwtSecret s
 
 // UploadAvatarHandler handles POST /api/upload/avatar
 func (c *UploadController) UploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
-	
+
 	//Only post req allowed
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -72,15 +72,15 @@ func (c *UploadController) UploadAvatarHandler(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "file size exceeds 5MB limit")
 		return
 	}
-     //get the uploaded file
+	//get the uploaded file
 	file, header, err := r.FormFile("avatar")
-    if err != nil {
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "avatar file is required")
 		return
 	}
 	defer file.Close()
 
-	//temp space to store first 512 bytes of image 
+	//temp space to store first 512 bytes of image
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
 
@@ -88,7 +88,7 @@ func (c *UploadController) UploadAvatarHandler(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "failed to read uploaded file")
 		return
 	}
-     //to identify the file type
+	//to identify the file type
 	mimeType := http.DetectContentType(buf[:n])
 
 	allowedTypes := map[string]bool{
@@ -102,21 +102,21 @@ func (c *UploadController) UploadAvatarHandler(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "invalid image type: must be JPEG, PNG, WEBP, or GIF")
 		return
 	}
-//moving back to start of the file to read it completely
-_, err = file.Seek(0, io.SeekStart)
+	// moving back to start of the file to read it completely
+	_, err = file.Seek(0, io.SeekStart)
 
-if err != nil {
-    writeError(w, http.StatusInternalServerError,
-        "failed to reset uploaded file")
-    return
-}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError,
+			"failed to reset uploaded file")
+		return
+	}
 
-fullBytes, err := io.ReadAll(file)
-if err != nil {
-    writeError(w, http.StatusInternalServerError,
-        "failed to read image data")
-    return
-}
+	fullBytes, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError,
+			"failed to read image data")
+		return
+	}
 
 	// 5. Upload to Cloudinary
 	cld, err := cloudinary.NewFromParams(
@@ -131,18 +131,18 @@ if err != nil {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
-    //create a unique filename for cloudinary public id
+	//create a unique filename for cloudinary public id
 	publicID := fmt.Sprintf("avatar_%s_%d", claims.UserID, time.Now().Unix())
-// configuring the upload
+	// configuring the upload
 	uploadParams := uploader.UploadParams{
 		Folder:         c.uploadFolder,
 		PublicID:       publicID,
 		Overwrite:      boolPtr(true),
 		Transformation: "c_thumb,g_face,w_400,h_400/f_auto,q_auto",
 	}
-//upload to cloudinary
+	//upload to cloudinary
 	uploadResult, err := cld.Upload.Upload(ctx, bytes.NewReader(fullBytes), uploadParams)
-	
+
 	if err != nil {
 		writeError(w, http.StatusBadGateway, fmt.Sprintf("cloudinary upload error: %v", err))
 		return

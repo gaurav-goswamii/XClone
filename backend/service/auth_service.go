@@ -119,6 +119,7 @@ func (s *AuthService) CheckUsernameAvailability(username string) (bool, string, 
 
 // Signup performs validation, checks uniqueness, hashes password, and saves the user
 func (s *AuthService) Signup(req SignupRequest) (*models.User, error) {
+
 	name := strings.TrimSpace(req.Name)
 	if len(name) == 0 || len(name) > 50 {
 		return nil, errors.New("name must be between 1 and 50 characters")

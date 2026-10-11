@@ -11,10 +11,10 @@ import (
 
 var (
 	ErrUserNotFound         = errors.New("user not found")
-	ErrUserAlreadyExists     = errors.New("user already exists")
-	ErrVerificationNotFound  = errors.New("verification record not found")
-	ErrVerificationExpired   = errors.New("verification code expired")
-	ErrInvalidVerification   = errors.New("invalid verification code")
+	ErrUserAlreadyExists    = errors.New("user already exists")
+	ErrVerificationNotFound = errors.New("verification record not found")
+	ErrVerificationExpired  = errors.New("verification code expired")
+	ErrInvalidVerification  = errors.New("invalid verification code")
 )
 
 // MemoryUserRepository implements UserRepository using an in-memory store

@@ -1,25 +1,21 @@
 package routes
 
 import (
-	"net/http"
-
 	"backend/config"
 	"backend/controllers"
 	"backend/middleware"
 	"backend/repository"
 	"backend/service"
+	"net/http"
 )
 
 // SetupRouter initializes repositories, services, controllers, routes, and attaches middlewares
-func SetupRouter(cfg *config.Config, repos ...repository.UserRepository) http.Handler {
+// like a backend reception
+func SetupRouter(
+	cfg *config.Config,
+	userRepo repository.UserRepository,
+) http.Handler {
 	mux := http.NewServeMux()
-
-	var userRepo repository.UserRepository
-	if len(repos) > 0 && repos[0] != nil {
-		userRepo = repos[0]
-	} else {
-		userRepo = repository.NewMemoryUserRepository()
-	}
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
@@ -49,6 +45,7 @@ func SetupRouter(cfg *config.Config, repos ...repository.UserRepository) http.Ha
 
 	// User Profile & Media Upload endpoints
 	mux.HandleFunc("/api/upload/avatar", uploadController.UploadAvatarHandler)
+	// profile update & get route
 	mux.HandleFunc("/api/users/profile", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut || r.Method == http.MethodPatch {
 			authController.UpdateProfileHandler(w, r)
@@ -60,7 +57,7 @@ func SetupRouter(cfg *config.Config, repos ...repository.UserRepository) http.Ha
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
-	mux.HandleFunc("/api/users/by-username", authController.GetUserProfileHandler)
+
 	mux.HandleFunc("/api/users/", authController.GetUserProfileHandler)
 
 	// Apply global middleware chain

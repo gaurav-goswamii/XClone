@@ -174,31 +174,23 @@ func (c *AuthController) CheckUsernameHandler(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// MeHandler handles GET /api/auth/me (validates cookie or Authorization Bearer token)
+// MeHandler handles GET /api/auth/me (validates cookie)
 func (c *AuthController) MeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	var tokenStr string
-
-	// 1. Check HTTP-only cookie first
+	// reading the cookie stored in browser
 	cookie, err := r.Cookie(AuthCookieName)
 
-if err != nil || cookie.Value == "" {
-    writeError(w, http.StatusUnauthorized, "missing authentication token")
-    return
-}
-
-tokenStr = cookie.Value
-
-	if tokenStr == "" {
-		writeError(w, http.StatusUnauthorized, "missing authentication token or cookie")
+	if err != nil || cookie.Value == "" {
+		writeError(w, http.StatusUnauthorized, "missing authentication token")
 		return
 	}
 
-	claims, err := utils.ValidateJWT(tokenStr, c.jwtSecret)
+	//checking the cookie using secret and extracting user info into claims
+	claims, err := utils.ValidateJWT(cookie.Value, c.jwtSecret)
 	if err != nil {
 		clearAuthCookie(w)
 		writeError(w, http.StatusUnauthorized, "invalid or expired authentication token")
@@ -237,12 +229,12 @@ func (c *AuthController) UpdateProfileHandler(w http.ResponseWriter, r *http.Req
 	var tokenStr string
 	cookie, err := r.Cookie(AuthCookieName)
 
-if err != nil || cookie.Value == "" {
-    writeError(w, http.StatusUnauthorized, "missing authentication token")
-    return
-}
+	if err != nil || cookie.Value == "" {
+		writeError(w, http.StatusUnauthorized, "missing authentication token")
+		return
+	}
 
-tokenStr = cookie.Value
+	tokenStr = cookie.Value
 
 	if tokenStr == "" {
 		writeError(w, http.StatusUnauthorized, "missing authentication token or cookie")

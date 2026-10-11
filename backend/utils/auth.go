@@ -4,11 +4,10 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
-	"time"
-
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"math/big"
+	"time"
 )
 
 // JWTClaims represents standard XClone auth claims

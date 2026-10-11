@@ -22,7 +22,7 @@ type Config struct {
 func LoadConfig() *Config {
 	// Load env file from /backend dir
 	_ = godotenv.Load(".env")
-     // collecting config values
+	// collecting config values
 	port := os.Getenv("PORT")
 	env := os.Getenv("ENV")
 	dbURL := os.Getenv("DATABASE_URL")
