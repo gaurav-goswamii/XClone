@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import UserAvatar from "../../components/ui/UserAvatar";
 import AccountPill from "../../components/navigation/AccountPill";
+import PostCard, { PostResponse } from "../../components/post/PostCard";
 
 interface UserProfile {
   id: string;
@@ -18,6 +19,7 @@ interface UserProfile {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const CHAR_LIMIT = 280;
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -26,16 +28,10 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [tweetText, setTweetText] = useState<string>("");
-  const [tweets, setTweets] = useState<Array<{ id: string; author: string; handle: string; time: string; text: string; likes: number }>>([
-    {
-      id: "post_1",
-      author: "X Clone Team",
-      handle: "xclone",
-      time: "10m",
-      text: "Welcome to the full-stack X (Twitter) clone! Sign-up flow, layered Go backend, and modern Next.js 16 frontend are now live 🚀",
-      likes: 42,
-    },
-  ]);
+  const [feedPosts, setFeedPosts] = useState<PostResponse[]>([]);
+  const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(true);
+  const [isPosting, setIsPosting] = useState<boolean>(false);
+  const [postError, setPostError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -80,6 +76,33 @@ export default function DashboardPage() {
     };
   }, [router]);
 
+  // Fetch live timeline feed
+  useEffect(() => {
+    let isCancelled = false;
+
+    fetch(`${API_BASE}/api/posts/feed`, {
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isCancelled && data?.status === "success" && Array.isArray(data.data?.posts)) {
+          setFeedPosts(data.data.posts);
+        }
+      })
+      .catch(() => {
+        // Keep feed empty on error
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoadingFeed(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   const handleLogout = async () => {
     // Clear backend session cookie
     try {
@@ -96,21 +119,40 @@ export default function DashboardPage() {
     router.replace("/login");
   };
 
-  const handlePostTweet = (e: React.FormEvent) => {
+  const handlePostTweet = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tweetText.trim()) return;
+    const content = tweetText.trim();
+    if (!content || isPosting || content.length > CHAR_LIMIT) return;
 
-    const newPost = {
-      id: `post_${Date.now()}`,
-      author: user?.name || "Anonymous",
-      handle: user?.username || "user",
-      time: "Just now",
-      text: tweetText.trim(),
-      likes: 0,
-    };
+    setIsPosting(true);
+    setPostError(null);
 
-    setTweets([newPost, ...tweets]);
-    setTweetText("");
+    try {
+      const res = await fetch(`${API_BASE}/api/posts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ content }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.status !== "success") {
+        setPostError(data?.message || "Failed to post. Please try again.");
+        return;
+      }
+
+      if (data.data?.post) {
+        setFeedPosts((prev) => [data.data.post, ...prev]);
+        setTweetText("");
+      }
+    } catch {
+      setPostError("Network error. Could not post tweet.");
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   if (isLoading || !user) {
@@ -208,25 +250,52 @@ export default function DashboardPage() {
                 className="hover:opacity-90 transition cursor-pointer"
               />
             </Link>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <textarea
                 value={tweetText}
-                onChange={(e) => setTweetText(e.target.value)}
+                onChange={(e) => {
+                  setTweetText(e.target.value);
+                  if (postError) setPostError(null);
+                }}
                 placeholder="What is happening?!"
-                className="w-full bg-transparent text-[18px] text-[#e7e9ea] outline-none placeholder-[#71767b] resize-none min-h-[60px]"
+                maxLength={CHAR_LIMIT}
+                disabled={isPosting}
+                className="w-full bg-transparent text-[18px] text-[#e7e9ea] outline-none placeholder-[#71767b] resize-none min-h-[60px] disabled:opacity-50"
               />
+
+              {postError && (
+                <div className="mb-2 text-xs text-[#f4212e] bg-[#f4212e]/10 py-1.5 px-3 rounded-lg border border-[#f4212e]/20">
+                  {postError}
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-2 border-t border-[#2f3336]">
-                <div className="flex gap-3 text-[#1d9bf0]">
-                  <span className="cursor-pointer hover:opacity-80">🖼️</span>
-                  <span className="cursor-pointer hover:opacity-80">📊</span>
-                  <span className="cursor-pointer hover:opacity-80">😊</span>
+                <div className="flex items-center gap-3 text-[#71767b] text-xs">
+                  {tweetText.length > 0 && (
+                    <span
+                      className={`font-mono text-xs ${
+                        CHAR_LIMIT - tweetText.length <= 20
+                          ? "text-[#f4212e] font-bold"
+                          : "text-[#71767b]"
+                      }`}
+                    >
+                      {CHAR_LIMIT - tweetText.length}
+                    </span>
+                  )}
                 </div>
                 <button
                   type="submit"
-                  disabled={!tweetText.trim()}
-                  className="px-4 py-1.5 rounded-full bg-[#1d9bf0] text-white font-bold text-sm hover:bg-[#1a8cd8] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition"
+                  disabled={!tweetText.trim() || isPosting || tweetText.length > CHAR_LIMIT}
+                  className="px-4 py-1.5 rounded-full bg-[#1d9bf0] text-white font-bold text-sm hover:bg-[#1a8cd8] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition flex items-center gap-2"
                 >
-                  Post
+                  {isPosting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Posting...</span>
+                    </>
+                  ) : (
+                    <span>Post</span>
+                  )}
                 </button>
               </div>
             </div>
@@ -234,36 +303,22 @@ export default function DashboardPage() {
 
           {/* Posts Feed */}
           <div>
-            {tweets.map((post) => (
-              <article key={post.id} className="p-4 border-b border-[#2f3336] hover:bg-[#080808] transition flex gap-3">
-                <Link href={`/${post.handle}`} className="shrink-0">
-                  <UserAvatar
-                    name={post.author}
-                    size="md"
-                    className="hover:opacity-90 transition cursor-pointer"
-                  />
-                </Link>
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Link href={`/${post.handle}`} className="font-bold text-[#eff3f4] hover:underline cursor-pointer">
-                      {post.author}
-                    </Link>
-                    <Link href={`/${post.handle}`} className="text-[#71767b] hover:underline cursor-pointer">
-                      @{post.handle}
-                    </Link>
-                    <span className="text-[#71767b]">·</span>
-                    <span className="text-[#71767b]">{post.time}</span>
-                  </div>
-                  <p className="mt-1 text-[15px] leading-relaxed text-[#e7e9ea]">{post.text}</p>
-                  <div className="mt-3 flex items-center gap-12 text-[#71767b] text-xs">
-                    <span className="hover:text-[#1d9bf0] cursor-pointer">💬 2</span>
-                    <span className="hover:text-[#00ba7c] cursor-pointer">🔁 5</span>
-                    <span className="hover:text-[#f4212e] cursor-pointer">❤️ {post.likes}</span>
-                    <span className="hover:text-[#1d9bf0] cursor-pointer">📊 1.2K</span>
-                  </div>
-                </div>
-              </article>
-            ))}
+            {isLoadingFeed ? (
+              <div className="py-12 flex justify-center items-center">
+                <div className="w-6 h-6 border-2 border-[#1d9bf0] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : feedPosts.length === 0 ? (
+              <div className="py-16 px-6 text-center">
+                <p className="text-xl font-bold text-[#eff3f4]">Welcome to your timeline!</p>
+                <p className="text-sm text-[#71767b] mt-1.5">
+                  Be the first to share an update. Write your thoughts above and click Post.
+                </p>
+              </div>
+            ) : (
+              feedPosts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))
+            )}
           </div>
         </main>
 

@@ -33,8 +33,9 @@ func main() {
 	//(db= connection to database, NewPostgresUserRepository= name of the tool,
 	// userRepo= variable that holds the tool)
 	userRepo := repository.NewPostgresUserRepository(db)
+	postRepo := repository.NewPostgresPostRepository(db)
 	//router is the main handler for all HTTP requests to handlers
-	router := routes.SetupRouter(cfg, userRepo)
+	router := routes.SetupRouter(cfg, userRepo, postRepo)
 	//address of the server
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("🚀 Starting XClone Backend on http://localhost%s (Environment: %s)\n", addr, cfg.Environment)

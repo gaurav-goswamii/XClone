@@ -1,6 +1,6 @@
 # XClone
 
-A modern, high-performance full-stack social media platform (Twitter / X clone) built with a **Next.js 16** App Router frontend and a modular, clean-architecture **Go (Golang)** backend.
+A modern, high-performance full-stack social media platform (Twitter / X clone) built with a **Next.js 16** App Router frontend and a modular, clean-architecture **Go (Golang)** backend backed by **PostgreSQL**.
 
 ---
 
@@ -10,9 +10,10 @@ The repository is structured as a monorepo separating the Next.js client from th
 
 ```
 XClone/
+├── compose.yaml                            # Docker Compose configuration for PostgreSQL 16
 ├── frontend/                               # Next.js 16 Client Application
 │   ├── app/                                # Next.js App Router
-│   │   ├── [username]/                     # Dynamic user profile page
+│   │   ├── [username]/                     # Dynamic user profile page & user post timeline
 │   │   │   └── page.tsx
 │   │   ├── dashboard/                      # Main feed and tweet timeline
 │   │   │   └── page.tsx
@@ -28,6 +29,8 @@ XClone/
 │   │   ├── navigation/                     # Navigation bars & account popovers
 │   │   │   ├── AccountPill.tsx             # Floating user badge in sidebar
 │   │   │   └── AccountPopover.tsx          # Logout & account switch dropdown
+│   │   ├── post/                           # Post feed & timeline components
+│   │   │   └── PostCard.tsx                # Tweet card with relative timestamps & actions
 │   │   ├── profile/                        # User profile components
 │   │   │   └── EditProfileModal.tsx        # Profile editing modal (Avatar, Banner, Bio)
 │   │   └── ui/                             # Shared atomic components
@@ -44,6 +47,7 @@ XClone/
 │   │   └── config.go
 │   ├── controllers/                        # HTTP controllers & request handlers
 │   │   ├── auth_controller.go              # Register, Login, Me, Logout, Profile handlers
+│   │   ├── post_controller.go              # Tweet creation & feed handlers
 │   │   ├── upload_controller.go            # Media & Cloudinary image upload handlers
 │   │   └── controller.go                   # Health check & base controllers
 │   ├── database/                           # Database connection & schema setup
@@ -53,14 +57,13 @@ XClone/
 │   ├── models/                             # Domain models & entities
 │   │   └── model.go                        # User & Post data structures
 │   ├── repository/                         # Persistence abstraction layer
-│   │   ├── repository.go                   # UserRepository interface definition
-│   │   ├── postgres_repo.go                # PostgreSQL SQL implementation
-│   │   └── memory_repo.go                  # Thread-safe in-memory fallback implementation
+│   │   ├── repository.go                   # UserRepository & PostRepository interface definitions
+│   │   └── postgres_repo.go                # PostgreSQL SQL implementation
 │   ├── routes/                             # Route definitions & router setup
 │   │   └── routes.go                       # Route registration & dependency injection
 │   ├── service/                            # Core business logic layer
 │   │   ├── auth_service.go                 # Registration, login, validation & hashing
-│   │   └── service.go                      # Base service interfaces
+│   │   └── post_service.go                 # Post creation & timeline retrieval logic
 │   ├── utils/                              # Cryptographic & utility helpers
 │   │   ├── auth.go                         # JWT token creation, parsing & validation
 │   │   └── utils.go                        # Utility helpers
@@ -87,8 +90,8 @@ XClone/
 ### Backend
 - **Language**: [Go (Golang 1.23+)](https://go.dev/)
 - **Architecture**: Clean / Layered Architecture (`Controller` -> `Service` -> `Repository`)
-- **Database**: PostgreSQL (with automated schema migration) and In-Memory fallback
-- **Authentication**: JWT (`golang-jwt/jwt/v5`) stored in HTTP-only secure cookies
+- **Database**: PostgreSQL 16 with automated schema migration, indexed queries, and Docker Compose orchestration
+- **Authentication**: JWT (`golang-jwt/jwt/v5`) stored in HTTP-only secure cookies (`x_auth_token`)
 - **Password Hashing**: `golang.org/x/crypto/bcrypt`
 - **Cloud Storage**: Cloudinary Go SDK for media uploads
 - **Router**: Go standard library `http.ServeMux` with modular middleware chaining
@@ -105,18 +108,26 @@ XClone/
 - 🛡️ **Edge Route Protection**:
   - Next.js Proxy middleware automatically redirects unauthenticated users trying to visit `/dashboard` to `/login`.
   - Automatically redirects authenticated users away from `/login` or `/signup` directly to `/dashboard`.
+- ✍️ **Post & Tweet Creation**:
+  - Real-time tweet creation with character counter (280 characters limit).
+  - Authenticated post submissions linked to user identity via secure JWT HTTP cookies.
+  - Live posting feedback with loading indicators and client-side error handling.
+- 📰 **Chronological Feed & Dynamic Timelines**:
+  - Global chronological feed (`/api/posts/feed`) joining post records with author profile data (`name`, `username`, `avatar_url`).
+  - User-specific post timeline (`/api/posts/user?username=...`) on profile pages.
+  - Reusable `PostCard` component featuring relative timestamps ("now", "5m", "2h", "3d"), action button counters (replies, retweets, likes), and direct profile navigation.
 - 👤 **User Profiles & Customization**:
   - Dynamic user profile routes (`/[username]`).
   - Full profile editing modal supporting custom display names, bios, avatars, and banner images.
   - Fallback-safe avatar rendering with first-letter fallback badges.
   - Interactive profile tabs: Posts, Replies, Highlights, Media, and Likes.
-- 📱 **Interactive Dashboard & Timeline**:
+- 📱 **Interactive Dashboard Layout**:
   - Responsive 3-column Twitter/X layout (Left navigation, Main tweet timeline, Right widgets).
-  - Tweet composer with character counter, media upload buttons, and post actions.
   - Trending topics and "Who to follow" sidebar widgets.
-- 🗄️ **Dual Persistence Layer**:
-  - Production-ready PostgreSQL storage with parameterized queries.
-  - Zero-dependency in-memory repository fallback for fast testing and offline development.
+- 🗄️ **Production PostgreSQL Persistence**:
+  - Relational schema with foreign key constraints, cascading deletions, and indexed lookups (`idx_users_username_lower`, `idx_posts_created_at`, `idx_posts_user_id`).
+  - Automated database migrations run at server boot.
+  - Seamless local orchestration with Docker Compose.
 
 ---
 
@@ -130,8 +141,15 @@ XClone/
 | `POST` | `/api/auth/logout` | Invalidate session & clear auth cookie | Yes |
 | `GET` | `/api/auth/check-username` | Check availability of a username (`?username=`) | No |
 | `GET` | `/api/auth/me` | Fetch currently authenticated user session via cookie | Yes |
-| `GET` | `/api/users/:username` | Retrieve public user profile by username or `?username=` | No |
+| `GET` | `/api/users/profile` | Retrieve public user profile (`?username=`) | No |
 | `PUT` / `PATCH` | `/api/users/profile` | Update profile (name, bio, avatar) | Yes |
+
+### Posts & Timelines
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/api/posts` | Create a new tweet / post | Yes |
+| `GET` | `/api/posts/feed` | Retrieve global chronological timeline feed (`?limit=20&offset=0`) | No |
+| `GET` | `/api/posts/user` | Retrieve posts by a specific username (`?username=&limit=20&offset=0`) | No |
 
 ### Media & System
 | Method | Endpoint | Description | Auth Required |
@@ -157,9 +175,6 @@ CLOUDINARY_API_SECRET=your_api_secret
 CLOUDINARY_UPLOAD_FOLDER=xclone
 ```
 
-> [!NOTE]
-> If `DATABASE_URL` is omitted or PostgreSQL is unreachable, the backend gracefully falls back to the thread-safe `MemoryUserRepository` for local development.
-
 ### Frontend Configuration (`frontend/.env.local`)
 Create a `.env.local` file in the `frontend/` folder:
 
@@ -175,11 +190,26 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 - **Node.js**: v18.0.0 or higher
 - **npm**: v9.0.0 or higher
 - **Go**: v1.23.0 or higher
-- **PostgreSQL**: (Optional for local memory mode)
+- **Docker & Docker Compose**: (Recommended for PostgreSQL) or local PostgreSQL v14+
 
 ---
 
-### 2. Backend Setup
+### 2. Database Setup
+
+Start the PostgreSQL 16 container using the provided `compose.yaml`:
+
+```bash
+docker compose up -d
+```
+
+To verify the database container status:
+```bash
+docker compose ps
+```
+
+---
+
+### 3. Backend Setup
 
 ```bash
 cd backend
@@ -200,7 +230,7 @@ curl http://localhost:8080/api/health
 
 ---
 
-### 3. Frontend Setup
+### 4. Frontend Setup
 
 ```bash
 cd frontend

@@ -5,16 +5,14 @@ import (
 	"errors"
 	"strings"
 	"time"
-
 	"backend/models"
-
 	"github.com/lib/pq"
 )
 
 // PostgresUserRepository implements UserRepository using a PostgreSQL database
 type PostgresUserRepository struct {
 	db *sql.DB
-}
+}	
 
 // NewPostgresUserRepository creates a new PostgresUserRepository
 func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
@@ -113,62 +111,6 @@ func (r *PostgresUserRepository) GetByUsername(username string) (*models.User, e
 	return &user, nil
 }
 
-// SaveVerificationCode stores an OTP code for an email with expiration
-func (r *PostgresUserRepository) SaveVerificationCode(email, code string, ttl time.Duration) error {
-	normalized := strings.ToLower(strings.TrimSpace(email))
-	expiresAt := time.Now().Add(ttl)
-
-	query := `
-		INSERT INTO verification_records (email, code, expires_at, attempts)
-		VALUES ($1, $2, $3, 0)
-		ON CONFLICT (email)
-		DO UPDATE SET code = EXCLUDED.code, expires_at = EXCLUDED.expires_at, attempts = 0
-	`
-	_, err := r.db.Exec(query, normalized, strings.TrimSpace(code), expiresAt)
-	return err
-}
-
-// VerifyCode verifies the OTP code against database record
-func (r *PostgresUserRepository) VerifyCode(email, code string) (bool, error) {
-	normalized := strings.ToLower(strings.TrimSpace(email))
-	query := `
-		SELECT code, expires_at, attempts
-		FROM verification_records
-		WHERE email = $1
-	`
-	var storedCode string
-	var expiresAt time.Time
-	var attempts int
-
-	err := r.db.QueryRow(query, normalized).Scan(&storedCode, &expiresAt, &attempts)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, ErrVerificationNotFound
-		}
-		return false, err
-	}
-
-	if time.Now().After(expiresAt) {
-		_, _ = r.db.Exec(`DELETE FROM verification_records WHERE email = $1`, normalized)
-		return false, ErrVerificationExpired
-	}
-
-	attempts++
-	if attempts > 5 {
-		_, _ = r.db.Exec(`DELETE FROM verification_records WHERE email = $1`, normalized)
-		return false, errors.New("maximum verification attempts exceeded, please request a new code")
-	}
-
-	if storedCode != strings.TrimSpace(code) {
-		_, _ = r.db.Exec(`UPDATE verification_records SET attempts = $1 WHERE email = $2`, attempts, normalized)
-		return false, ErrInvalidVerification
-	}
-
-	// Code successfully verified: remove record
-	_, _ = r.db.Exec(`DELETE FROM verification_records WHERE email = $1`, normalized)
-	return true, nil
-}
-
 // Create inserts a new user record into the PostgreSQL users table
 func (r *PostgresUserRepository) Create(user *models.User) error {
 	emailNorm := strings.ToLower(strings.TrimSpace(user.Email))
@@ -243,72 +185,9 @@ type PostgresPostRepository struct {
 	db *sql.DB
 }
 
-// NewPostgresPostRepository creates a new PostgresPostRepository
+// NewPostgresPostRepository creates a new PostgresPostRepository/constructor
 func NewPostgresPostRepository(db *sql.DB) *PostgresPostRepository {
 	return &PostgresPostRepository{db: db}
-}
-
-// GetByID retrieves a post by ID
-func (r *PostgresPostRepository) GetByID(id string) (*models.Post, error) {
-	query := `
-		SELECT id, user_id, content, media_url, likes, retweets, replies, created_at, updated_at
-		FROM posts
-		WHERE id = $1
-	`
-	var post models.Post
-	err := r.db.QueryRow(query, id).Scan(
-		&post.ID,
-		&post.UserID,
-		&post.Content,
-		&post.MediaURL,
-		&post.Likes,
-		&post.Retweets,
-		&post.Replies,
-		&post.CreatedAt,
-		&post.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &post, nil
-}
-
-// ListRecent retrieves the most recent posts
-func (r *PostgresPostRepository) ListRecent(limit int) ([]*models.Post, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-	query := `
-		SELECT id, user_id, content, media_url, likes, retweets, replies, created_at, updated_at
-		FROM posts
-		ORDER BY created_at DESC
-		LIMIT $1
-	`
-	rows, err := r.db.Query(query, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var posts []*models.Post
-	for rows.Next() {
-		var post models.Post
-		if err := rows.Scan(
-			&post.ID,
-			&post.UserID,
-			&post.Content,
-			&post.MediaURL,
-			&post.Likes,
-			&post.Retweets,
-			&post.Replies,
-			&post.CreatedAt,
-			&post.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		posts = append(posts, &post)
-	}
-	return posts, rows.Err()
 }
 
 // Create inserts a new post record into the database
@@ -336,3 +215,132 @@ func (r *PostgresPostRepository) Create(post *models.Post) error {
 	)
 	return err
 }
+
+// GetByID retrieves a post by ID including author profile details
+func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error) {
+	query := `
+		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
+		       p.content, COALESCE(p.media_url, ''), p.likes, p.retweets, p.replies,
+		       p.created_at, p.updated_at
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		WHERE p.id = $1
+	`
+	var post models.PostResponse
+	err := r.db.QueryRow(query, strings.TrimSpace(id)).Scan(
+		&post.ID,
+		&post.UserID,
+		&post.AuthorName,
+		&post.AuthorUsername,
+		&post.AuthorAvatar,
+		&post.Content,
+		&post.MediaURL,
+		&post.Likes,
+		&post.Retweets,
+		&post.Replies,
+		&post.CreatedAt,
+		&post.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &post, nil
+}
+
+// ListFeed retrieves the most recent posts joined with author user data
+func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResponse, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := `
+		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
+		       p.content, COALESCE(p.media_url, ''), p.likes, p.retweets, p.replies,
+		       p.created_at, p.updated_at
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		ORDER BY p.created_at DESC
+		LIMIT $1 OFFSET $2
+	`
+	rows, err := r.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	posts := make([]*models.PostResponse, 0)
+	for rows.Next() {
+		var post models.PostResponse
+		if err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&post.AuthorName,
+			&post.AuthorUsername,
+			&post.AuthorAvatar,
+			&post.Content,
+			&post.MediaURL,
+			&post.Likes,
+			&post.Retweets,
+			&post.Replies,
+			&post.CreatedAt,
+			&post.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		posts = append(posts, &post)
+	}
+	return posts, rows.Err()
+}
+
+// ListByUser retrieves posts created by a specific user (identified by username)
+func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) ([]*models.PostResponse, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := `
+		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
+		       p.content, COALESCE(p.media_url, ''), p.likes, p.retweets, p.replies,
+		       p.created_at, p.updated_at
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		WHERE LOWER(u.username) = LOWER($1)
+		ORDER BY p.created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	rows, err := r.db.Query(query, strings.TrimSpace(username), limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	posts := make([]*models.PostResponse, 0)
+	for rows.Next() {
+		var post models.PostResponse
+		if err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&post.AuthorName,
+			&post.AuthorUsername,
+			&post.AuthorAvatar,
+			&post.Content,
+			&post.MediaURL,
+			&post.Likes,
+			&post.Retweets,
+			&post.Replies,
+			&post.CreatedAt,
+			&post.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		posts = append(posts, &post)
+	}
+	return posts, rows.Err()
+}
+

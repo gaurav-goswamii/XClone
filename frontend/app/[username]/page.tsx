@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import UserAvatar from "../../components/ui/UserAvatar";
 import AccountPill from "../../components/navigation/AccountPill";
 import EditProfileModal, { UserProfileData } from "../../components/profile/EditProfileModal";
+import PostCard, { PostResponse } from "../../components/post/PostCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -24,6 +25,10 @@ export default function UserProfilePage({ params }: PageProps) {
   const [profileUser, setProfileUser] = useState<UserProfileData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userNotFound, setUserNotFound] = useState<boolean>(false);
+
+  // Profile posts
+  const [userPosts, setUserPosts] = useState<PostResponse[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState<boolean>(true);
 
   // Profile Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -86,6 +91,41 @@ export default function UserProfilePage({ params }: PageProps) {
         if (!isCancelled) {
           setIsLoading(false);
           setUserNotFound(true);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [targetUsername]);
+
+  // Fetch posts created by target user
+  useEffect(() => {
+    let isCancelled = false;
+
+    fetch(`${API_BASE}/api/posts/user?username=${targetUsername}`, {
+      credentials: "include",
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error("Failed to load user posts");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (!isCancelled) {
+          if (data.status === "success" && Array.isArray(data.data?.posts)) {
+            setUserPosts(data.data.posts);
+          } else {
+            setUserPosts([]);
+          }
+          setIsLoadingPosts(false);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setUserPosts([]);
+          setIsLoadingPosts(false);
         }
       });
 
@@ -330,30 +370,30 @@ export default function UserProfilePage({ params }: PageProps) {
 
               {/* Profile Feed Content */}
               <div>
-                <article className="p-4 border-b border-[#2f3336] flex gap-3 hover:bg-[#080808] transition">
-                  <UserAvatar
-                    src={profileUser.avatar_url}
-                    name={profileUser.name}
-                    size="md"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <span className="font-bold text-[#eff3f4]">{profileUser.name}</span>
-                      <span className="text-[#71767b]">@{profileUser.username}</span>
-                      <span className="text-[#71767b]">·</span>
-                      <span className="text-[#71767b]">1h</span>
+                {activeTab === "Posts" ? (
+                  isLoadingPosts ? (
+                    <div className="py-12 flex justify-center items-center">
+                      <div className="w-6 h-6 border-2 border-[#1d9bf0] border-t-transparent rounded-full animate-spin" />
                     </div>
-                    <p className="mt-1 text-[15px] leading-relaxed text-[#e7e9ea]">
-                      Hello everyone on X Clone! Excited to share my profile picture and dynamic handle. 🚀
-                    </p>
-                    <div className="mt-3 flex items-center gap-12 text-[#71767b] text-xs">
-                      <span className="hover:text-[#1d9bf0] cursor-pointer">💬 3</span>
-                      <span className="hover:text-[#00ba7c] cursor-pointer">🔁 8</span>
-                      <span className="hover:text-[#f4212e] cursor-pointer">❤️ 29</span>
-                      <span className="hover:text-[#1d9bf0] cursor-pointer">📊 1.8K</span>
+                  ) : userPosts.length === 0 ? (
+                    <div className="py-12 px-6 text-center">
+                      <p className="text-xl font-bold text-[#eff3f4]">
+                        @{profileUser.username} hasn&apos;t posted yet
+                      </p>
+                      <p className="text-sm text-[#71767b] mt-1">
+                        When they post, their posts will show up here.
+                      </p>
                     </div>
+                  ) : (
+                    userPosts.map((post) => (
+                      <PostCard key={post.id} post={post} />
+                    ))
+                  )
+                ) : (
+                  <div className="py-12 px-6 text-center text-[#71767b]">
+                    <p className="text-sm">Nothing to see here yet in {activeTab}.</p>
                   </div>
-                </article>
+                )}
               </div>
             </div>
           ) : null}

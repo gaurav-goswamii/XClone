@@ -51,13 +51,6 @@ func Migrate(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username));
 	CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email));
 
-	CREATE TABLE IF NOT EXISTS verification_records (
-		email VARCHAR(255) PRIMARY KEY,
-		code VARCHAR(10) NOT NULL,
-		expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-		attempts INT DEFAULT 0
-	);
-
 	CREATE TABLE IF NOT EXISTS posts (
 		id VARCHAR(64) PRIMARY KEY,
 		user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,

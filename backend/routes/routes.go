@@ -14,11 +14,13 @@ import (
 func SetupRouter(
 	cfg *config.Config,
 	userRepo repository.UserRepository,
+	postRepo repository.PostRepository,
 ) http.Handler {
 	mux := http.NewServeMux()
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
+	postService := service.NewPostService(postRepo)
 
 	// Initialize controllers
 	authController := controllers.NewAuthController(
@@ -32,6 +34,10 @@ func SetupRouter(
 		cfg.CloudinaryUploadFolder,
 		cfg.JWTSecret,
 	)
+	postController := controllers.NewPostController(
+		postService,
+		cfg.JWTSecret,
+	)
 
 	// Health and Status endpoints
 	mux.HandleFunc("/api/health", controllers.HealthCheckHandler)
@@ -42,6 +48,11 @@ func SetupRouter(
 	mux.HandleFunc("/api/auth/logout", authController.LogoutHandler)
 	mux.HandleFunc("/api/auth/check-username", authController.CheckUsernameHandler)
 	mux.HandleFunc("/api/auth/me", authController.MeHandler)
+
+	// Posts endpoints
+	mux.HandleFunc("/api/posts", postController.CreatePostHandler)
+	mux.HandleFunc("/api/posts/feed", postController.FeedHandler)
+	mux.HandleFunc("/api/posts/user", postController.UserPostsHandler)
 
 	// User Profile & Media Upload endpoints
 	mux.HandleFunc("/api/upload/avatar", uploadController.UploadAvatarHandler)

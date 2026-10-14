@@ -17,14 +17,6 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// VerificationRecord stores pending OTP verification state
-type VerificationRecord struct {
-	Email     string    `json:"email"`
-	Code      string    `json:"code"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Attempts  int       `json:"attempts"`
-}
-
 // Post represents a post/tweet in the XClone platform
 type Post struct {
 	ID        string    `json:"id"`
@@ -37,3 +29,20 @@ type Post struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// PostResponse represents a post returned with author profile details
+type PostResponse struct {
+	ID             string    `json:"id"`
+	UserID         string    `json:"user_id"`
+	AuthorName     string    `json:"author_name"`
+	AuthorUsername string    `json:"author_username"`
+	AuthorAvatar   string    `json:"author_avatar"`
+	Content        string    `json:"content"`
+	MediaURL       string    `json:"media_url,omitempty"`
+	Likes          int       `json:"likes"`
+	Retweets       int       `json:"retweets"`
+	Replies        int       `json:"replies"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+

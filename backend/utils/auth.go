@@ -1,12 +1,10 @@
 package utils
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
-	"math/big"
 	"time"
 )
 
@@ -15,22 +13,6 @@ type JWTClaims struct {
 	UserID   string `json:"sub"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
-}
-
-// GenerateOTP generates a cryptographically secure numeric OTP string of given length
-func GenerateOTP(digits int) (string, error) {
-	if digits <= 0 {
-		digits = 6
-	}
-
-	maxLimit := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(digits)), nil)
-	n, err := rand.Int(rand.Reader, maxLimit)
-	if err != nil {
-		return "", err
-	}
-
-	format := fmt.Sprintf("%%0%dd", digits)
-	return fmt.Sprintf(format, n.Int64()), nil
 }
 
 // HashPassword hashes a raw password using bcrypt
