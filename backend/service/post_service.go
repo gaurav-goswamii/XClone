@@ -38,7 +38,7 @@ func (s *PostService) CreatePost(userID, content string) (*models.PostResponse, 
 	if trimmedContent == "" {
 		return nil, ErrEmptyContent
 	}
-
+     //counting characters(for emojis got to use this setup)
 	if len([]rune(trimmedContent)) > 280 {
 		return nil, ErrContentTooLong
 	}

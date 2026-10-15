@@ -18,7 +18,7 @@ interface UserProfile {
   created_at?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 const CHAR_LIMIT = 280;
 
 export default function DashboardPage() {
