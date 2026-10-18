@@ -7,6 +7,7 @@ import UserAvatar from "../../components/ui/UserAvatar";
 import AccountPill from "../../components/navigation/AccountPill";
 import EditProfileModal, { UserProfileData } from "../../components/profile/EditProfileModal";
 import PostCard, { PostResponse } from "../../components/post/PostCard";
+import EditPostModal from "../../components/post/EditPostModal";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -32,6 +33,8 @@ export default function UserProfilePage({ params }: PageProps) {
 
   // Profile Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [editingPost, setEditingPost] = useState<PostResponse | null>(null);
+  const [postsError, setPostsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("Posts");
 
   // Fetch current authenticated session
@@ -145,6 +148,37 @@ export default function UserProfilePage({ params }: PageProps) {
     }
     setCurrentUser(null);
     router.push("/login");
+  };
+
+  // Replace the edited post in place, keeping its position in the timeline
+  const handlePostUpdated = (updatedPost: PostResponse) => {
+    setUserPosts((prev) =>
+      prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+    );
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm("Delete this post? This cannot be undone.")) return;
+
+    setPostsError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${postId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      // 404 means it is already gone, so drop it from the list either way
+      if (res.ok || res.status === 404) {
+        setUserPosts((prev) => prev.filter((post) => post.id !== postId));
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      setPostsError(data?.message || "Failed to delete post. Please try again.");
+    } catch {
+      setPostsError("Network error. Could not delete post.");
+    }
   };
 
   const isOwnProfile = Boolean(
@@ -370,6 +404,11 @@ export default function UserProfilePage({ params }: PageProps) {
 
               {/* Profile Feed Content */}
               <div>
+                {postsError && (
+                  <div className="mx-4 mt-3 p-3 bg-[#f4212e]/10 border border-[#f4212e]/30 rounded-xl text-[#f4212e] text-sm">
+                    {postsError}
+                  </div>
+                )}
                 {activeTab === "Posts" ? (
                   isLoadingPosts ? (
                     <div className="py-12 flex justify-center items-center">
@@ -386,7 +425,13 @@ export default function UserProfilePage({ params }: PageProps) {
                     </div>
                   ) : (
                     userPosts.map((post) => (
-                      <PostCard key={post.id} post={post} />
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        isOwner={post.user_id === currentUser?.id}
+                        onEdit={setEditingPost}
+                        onDelete={handleDeletePost}
+                      />
                     ))
                   )
                 ) : (
@@ -428,6 +473,16 @@ export default function UserProfilePage({ params }: PageProps) {
         </aside>
 
       </div>
+
+      {/* Edit Post Modal */}
+      {editingPost && (
+        <EditPostModal
+          isOpen={Boolean(editingPost)}
+          post={editingPost}
+          onClose={() => setEditingPost(null)}
+          onUpdated={handlePostUpdated}
+        />
+      )}
 
       {/* Edit Profile Modal */}
       {isOwnProfile && profileUser && (

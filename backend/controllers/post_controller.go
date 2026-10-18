@@ -24,6 +24,43 @@ func NewPostController(postService *service.PostService, jwtSecret string) *Post
 	}
 }
 
+// requireAuth validates the auth cookie and returns the caller's JWT claims.
+// It writes the failure response itself, so callers only need to check ok.
+func (c *PostController) requireAuth(w http.ResponseWriter, r *http.Request) (*utils.JWTClaims, bool) {
+	cookie, err := r.Cookie(AuthCookieName)
+	if err != nil || cookie.Value == "" {
+		writeError(w, http.StatusUnauthorized, "missing authentication token")
+		return nil, false
+	}
+
+	claims, err := utils.ValidateJWT(cookie.Value, c.jwtSecret)
+	if err != nil {
+		clearAuthCookie(w)
+		writeError(w, http.StatusUnauthorized, "invalid or expired authentication token")
+		return nil, false
+	}
+
+	return claims, true
+}
+
+// writePostError maps post service errors onto HTTP status codes
+func writePostError(w http.ResponseWriter, err error, fallback string) {
+	switch {
+	case errors.Is(err, service.ErrPostNotFound):
+		writeError(w, http.StatusNotFound, "post not found")
+	case errors.Is(err, service.ErrNotPostOwner):
+		writeError(w, http.StatusForbidden, "you can only modify your own posts")
+	case errors.Is(err, service.ErrEmptyContent):
+		writeError(w, http.StatusBadRequest, "post content cannot be empty")
+	case errors.Is(err, service.ErrContentTooLong):
+		writeError(w, http.StatusBadRequest, "post content exceeds 280 characters")
+	case errors.Is(err, service.ErrUnauthorizedPost):
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+	default:
+		writeError(w, http.StatusInternalServerError, fallback)
+	}
+}
+
 // CreatePostRequest represents request body for creating a post
 type CreatePostRequest struct {
 	Content string `json:"content"`
@@ -36,16 +73,8 @@ func (c *PostController) CreatePostHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	cookie, err := r.Cookie(AuthCookieName)
-	if err != nil || cookie.Value == "" {
-		writeError(w, http.StatusUnauthorized, "missing authentication token")
-		return
-	}
-
-	claims, err := utils.ValidateJWT(cookie.Value, c.jwtSecret)
-	if err != nil {
-		clearAuthCookie(w)
-		writeError(w, http.StatusUnauthorized, "invalid or expired authentication token")
+	claims, ok := c.requireAuth(w, r)
+	if !ok {
 		return
 	}
 
@@ -57,19 +86,7 @@ func (c *PostController) CreatePostHandler(w http.ResponseWriter, r *http.Reques
 
 	post, err := c.postService.CreatePost(claims.UserID, req.Content)
 	if err != nil {
-		if errors.Is(err, service.ErrEmptyContent) {
-			writeError(w, http.StatusBadRequest, "post content cannot be empty")
-			return
-		}
-		if errors.Is(err, service.ErrContentTooLong) {
-			writeError(w, http.StatusBadRequest, "post content exceeds 280 characters")
-			return
-		}
-		if errors.Is(err, service.ErrUnauthorizedPost) {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to create post")
+		writePostError(w, err, "failed to create post")
 		return
 	}
 
@@ -156,6 +173,96 @@ func (c *PostController) UserPostsHandler(w http.ResponseWriter, r *http.Request
 		Status: "success",
 		Data: map[string]interface{}{
 			"posts": posts,
+		},
+	})
+}
+
+// UpdatePostRequest represents request body for editing a post
+type UpdatePostRequest struct {
+	Content string `json:"content"`
+}
+
+// PostByIDHandler handles GET, PUT and DELETE on /api/posts/{id}
+func (c *PostController) PostByIDHandler(w http.ResponseWriter, r *http.Request) {
+	postID := strings.TrimSpace(r.PathValue("id"))
+	if postID == "" {
+		writeError(w, http.StatusBadRequest, "post id is required")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		c.getPost(w, postID)
+	case http.MethodPut:
+		c.updatePost(w, r, postID)
+	case http.MethodDelete:
+		c.deletePost(w, r, postID)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+// getPost serves a single post publicly, like the feed endpoints
+func (c *PostController) getPost(w http.ResponseWriter, postID string) {
+	post, err := c.postService.GetPost(postID)
+	if err != nil {
+		writePostError(w, err, "failed to fetch post")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Status: "success",
+		Data: map[string]interface{}{
+			"post": post,
+		},
+	})
+}
+
+// updatePost rewrites the content of a post owned by the caller
+func (c *PostController) updatePost(w http.ResponseWriter, r *http.Request, postID string) {
+	claims, ok := c.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	var req UpdatePostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	post, err := c.postService.UpdatePost(claims.UserID, postID, req.Content)
+	if err != nil {
+		writePostError(w, err, "failed to update post")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Status:  "success",
+		Message: "post updated successfully",
+		Data: map[string]interface{}{
+			"post": post,
+		},
+	})
+}
+
+// deletePost permanently removes a post owned by the caller
+func (c *PostController) deletePost(w http.ResponseWriter, r *http.Request, postID string) {
+	claims, ok := c.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	if err := c.postService.DeletePost(claims.UserID, postID); err != nil {
+		writePostError(w, err, "failed to delete post")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Status:  "success",
+		Message: "post deleted successfully",
+		Data: map[string]interface{}{
+			"id": postID,
 		},
 	})
 }

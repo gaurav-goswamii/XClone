@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import UserAvatar from "../ui/UserAvatar";
 
+
+//The post data structure 
 export interface PostResponse {
   id: string;
   user_id: string;
@@ -18,14 +20,19 @@ export interface PostResponse {
   created_at: string;
   updated_at?: string;
 }
-
+//Used by the parent container to transfer information and functions = props
 interface PostCardProps {
   post: PostResponse;
+  isOwner?: boolean;
   onLike?: (postId: string) => void;
   onRetweet?: (postId: string) => void;
   onReply?: (postId: string) => void;
+  //imp for edit/delete func
+  onEdit?: (post: PostResponse) => void;
+  onDelete?: (postId: string) => void;
 }
 
+//Formats the post creation time into a relative time string (e.g., "5m", "2h", "3d") or a date string if older than a week.
 function formatRelativeTime(dateString: string): string {
   try {
     const postDate = new Date(dateString);
@@ -56,8 +63,20 @@ function formatRelativeTime(dateString: string): string {
   }
 }
 
-export default function PostCard({ post, onLike, onRetweet, onReply }: PostCardProps) {
+//The PostCard component displays a single post with its content, author information, and action buttons. It also handles the display of the edit/delete menu for the post owner.
+export default function PostCard({
+  post,
+  isOwner = false,
+  onLike,
+  onRetweet,
+  onReply,
+  onEdit,
+  onDelete,
+}: PostCardProps) {
   const timeFormatted = formatRelativeTime(post.created_at);
+  // State to manage the visibility of the edit/delete menu/
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const canManage = isOwner && Boolean(onEdit || onDelete);
 
   return (
     <article
@@ -81,26 +100,95 @@ export default function PostCard({ post, onLike, onRetweet, onReply }: PostCardP
       {/* Post Content & Meta */}
       <div className="flex-1 min-w-0">
         {/* Author Header */}
-        <div className="flex items-center gap-1.5 text-[15px] leading-5 truncate">
-          <Link
-            href={`/${post.author_username}`}
-            className="font-bold text-[#eff3f4] hover:underline truncate cursor-pointer"
-          >
-            {post.author_name}
-          </Link>
-          <Link
-            href={`/${post.author_username}`}
-            className="text-[#71767b] hover:underline truncate cursor-pointer"
-          >
-            @{post.author_username}
-          </Link>
-          {timeFormatted && (
-            <>
-              <span className="text-[#71767b]">·</span>
-              <span className="text-[#71767b] shrink-0" title={new Date(post.created_at).toLocaleString()}>
-                {timeFormatted}
-              </span>
-            </>
+        <div className="flex items-start gap-2">
+          <div className="flex items-center gap-1.5 text-[15px] leading-5 truncate min-w-0 flex-1">
+            <Link
+              href={`/${post.author_username}`}
+              className="font-bold text-[#eff3f4] hover:underline truncate cursor-pointer"
+            >
+              {post.author_name}
+            </Link>
+            <Link
+              href={`/${post.author_username}`}
+              className="text-[#71767b] hover:underline truncate cursor-pointer"
+            >
+              @{post.author_username}
+            </Link>
+            {timeFormatted && (
+              <>
+                <span className="text-[#71767b]">·</span>
+                <Link
+                  href={`/post/${post.id}`}
+                  className="text-[#71767b] shrink-0 hover:underline cursor-pointer"
+                  title={new Date(post.created_at).toLocaleString()}
+                >
+                  {timeFormatted}
+                </Link>
+              </>
+            )}
+          </div>
+
+          {/* Owner-only actions: a sibling of the truncating block, never clipped by it */}
+          {canManage && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((open) => !open)}
+                className="w-8 h-8 -mr-1 rounded-full flex items-center justify-center text-[#71767b] hover:text-[#1d9bf0] hover:bg-[#1d9bf0]/10 transition cursor-pointer"
+                aria-label="More options"
+                aria-haspopup="menu"
+                aria-expanded={isMenuOpen}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                  <circle cx="5" cy="12" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="19" cy="12" r="2" />
+                </svg>
+              </button>
+
+              {isMenuOpen && (
+                <>
+                  {/* Catches clicks outside the menu so it closes */}
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setIsMenuOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-9 z-40 w-40 py-1 bg-black border border-[#2f3336] rounded-xl shadow-2xl overflow-hidden"
+                  >
+                    {onEdit && (
+                      //Edit button
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          onEdit(post);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-sm font-medium text-[#eff3f4] hover:bg-[#181818] transition cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          onDelete(post.id);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-sm font-medium text-[#f4212e] hover:bg-[#f4212e]/10 transition cursor-pointer"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 

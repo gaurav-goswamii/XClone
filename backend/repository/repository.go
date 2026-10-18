@@ -8,6 +8,7 @@ import (
 var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrPostNotFound      = errors.New("post not found")
 )
 
 // UserRepository defines data access methods for users
@@ -25,5 +26,7 @@ type PostRepository interface {
 	GetByID(id string) (*models.PostResponse, error)
 	ListFeed(limit, offset int) ([]*models.PostResponse, error)
 	ListByUser(username string, limit, offset int) ([]*models.PostResponse, error)
+	Update(id, userID, content string) error
+	Delete(id, userID string) error
 }
 

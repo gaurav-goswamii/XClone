@@ -242,6 +242,9 @@ func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error
 		&post.UpdatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPostNotFound
+		}
 		return nil, err
 	}
 	return &post, nil
@@ -344,3 +347,43 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 	return posts, rows.Err()
 }
 
+// Update changes the content of a post, scoped to its owner
+func (r *PostgresPostRepository) Update(id, userID, content string) error {
+	query := `
+		UPDATE posts
+		SET content = $1, updated_at = $2
+		WHERE id = $3 AND user_id = $4
+	`
+	res, err := r.db.Exec(query, content, time.Now(), strings.TrimSpace(id), strings.TrimSpace(userID))
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrPostNotFound
+	}
+	return nil
+}
+
+// Delete permanently removes a post, scoped to its owner
+func (r *PostgresPostRepository) Delete(id, userID string) error {
+	query := `
+		DELETE FROM posts
+		WHERE id = $1 AND user_id = $2
+	`
+	res, err := r.db.Exec(query, strings.TrimSpace(id), strings.TrimSpace(userID))
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrPostNotFound
+	}
+	return nil
+}

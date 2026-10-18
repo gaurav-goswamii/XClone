@@ -2,7 +2,7 @@ package config
 
 import (
 	"os"
-
+	"log"
 	"github.com/joho/godotenv"
 )
 
@@ -26,7 +26,13 @@ func LoadConfig() *Config {
 	port := os.Getenv("PORT")
 	env := os.Getenv("ENV")
 	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
 	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET is required")
+	}  
 	cloudinaryCloudName := os.Getenv("CLOUDINARY_CLOUD_NAME")
 	cloudinaryAPIKey := os.Getenv("CLOUDINARY_API_KEY")
 	cloudinaryAPISecret := os.Getenv("CLOUDINARY_API_SECRET")

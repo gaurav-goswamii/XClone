@@ -53,6 +53,7 @@ func SetupRouter(
 	mux.HandleFunc("/api/posts", postController.CreatePostHandler)
 	mux.HandleFunc("/api/posts/feed", postController.FeedHandler)
 	mux.HandleFunc("/api/posts/user", postController.UserPostsHandler)
+	mux.HandleFunc("/api/posts/{id}", postController.PostByIDHandler)
 
 	// User Profile & Media Upload endpoints
 	mux.HandleFunc("/api/upload/avatar", uploadController.UploadAvatarHandler)

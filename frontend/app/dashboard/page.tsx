@@ -1,11 +1,11 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import UserAvatar from "../../components/ui/UserAvatar";
 import AccountPill from "../../components/navigation/AccountPill";
 import PostCard, { PostResponse } from "../../components/post/PostCard";
+import EditPostModal from "../../components/post/EditPostModal";
 
 interface UserProfile {
   id: string;
@@ -32,6 +32,8 @@ export default function DashboardPage() {
   const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(true);
   const [isPosting, setIsPosting] = useState<boolean>(false);
   const [postError, setPostError] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<PostResponse | null>(null);
+  const [feedError, setFeedError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -152,6 +154,38 @@ export default function DashboardPage() {
       setPostError("Network error. Could not post tweet.");
     } finally {
       setIsPosting(false);
+    }
+  };
+
+  // Replace the edited post in place, keeping its position in the feed
+  const handlePostUpdated = (updatedPost: PostResponse) => {
+    setFeedPosts((prev) =>
+      prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+    //if the id of updated post = prev post id, then replace it
+    );
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm("Delete this post? This cannot be undone.")) return;
+
+    setFeedError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${postId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      // 404 means it is already gone, so drop it from the list either way
+      if (res.ok || res.status === 404) {
+        setFeedPosts((prev) => prev.filter((post) => post.id !== postId));
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      setFeedError(data?.message || "Failed to delete post. Please try again.");
+    } catch {
+      setFeedError("Network error. Could not delete post.");
     }
   };
 
@@ -303,6 +337,11 @@ export default function DashboardPage() {
 
           {/* Posts Feed */}
           <div>
+            {feedError && (
+              <div className="mx-4 mt-3 p-3 bg-[#f4212e]/10 border border-[#f4212e]/30 rounded-xl text-[#f4212e] text-sm">
+                {feedError}
+              </div>
+            )}
             {isLoadingFeed ? (
               <div className="py-12 flex justify-center items-center">
                 <div className="w-6 h-6 border-2 border-[#1d9bf0] border-t-transparent rounded-full animate-spin" />
@@ -316,7 +355,13 @@ export default function DashboardPage() {
               </div>
             ) : (
               feedPosts.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  isOwner={post.user_id === user.id}
+                  onEdit={setEditingPost}
+                  onDelete={handleDeletePost}
+                />
               ))
             )}
           </div>
@@ -342,6 +387,16 @@ export default function DashboardPage() {
         </aside>
 
       </div>
+
+      {/* Edit Post Modal */}
+      {editingPost && (
+        <EditPostModal
+          isOpen={Boolean(editingPost)}
+          post={editingPost}
+          onClose={() => setEditingPost(null)}
+          onUpdated={handlePostUpdated}
+        />
+      )}
     </div>
   );
 }
