@@ -29,7 +29,16 @@ export default function EditPostModal({
   const charCount = [...content].length;
   const trimmedContent = content.trim();
   const isUnchanged = trimmedContent === post.content.trim();
-  const canSave = trimmedContent.length > 0 && charCount <= CHAR_LIMIT && !isSaving && !isUnchanged;
+  // A post carrying photos is allowed to have no caption, so text is only
+  // required when there are no photos. Without this, a photo-only post opens a
+  // modal whose Save button can never enable. Mirrors the same rule in
+  // PostService.UpdatePost.
+  const hasPhotos = (post.media?.length ?? 0) > 0;
+  const canSave =
+    (trimmedContent.length > 0 || hasPhotos) &&
+    charCount <= CHAR_LIMIT &&
+    !isSaving &&
+    !isUnchanged;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -30,19 +30,31 @@ type Post struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// PostMedia represents a single photo attached to a post, in display order
+type PostMedia struct {
+	// Ordinal has no omitempty on purpose: 0 is the first photo, not a missing value
+	Ordinal   int    `json:"ordinal"`
+	URL       string `json:"url"`
+	PublicID  string `json:"public_id"`
+	MediaType string `json:"media_type,omitempty"`
+	Width     int    `json:"width,omitempty"`
+	Height    int    `json:"height,omitempty"`
+}
+
 // PostResponse represents a post returned with author profile details
 type PostResponse struct {
-	ID             string    `json:"id"`
-	UserID         string    `json:"user_id"`
-	AuthorName     string    `json:"author_name"`
-	AuthorUsername string    `json:"author_username"`
-	AuthorAvatar   string    `json:"author_avatar"`
-	Content        string    `json:"content"`
-	MediaURL       string    `json:"media_url,omitempty"`
-	Likes          int       `json:"likes"`
-	Retweets       int       `json:"retweets"`
-	Replies        int       `json:"replies"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             string      `json:"id"`
+	UserID         string      `json:"user_id"`
+	AuthorName     string      `json:"author_name"`
+	AuthorUsername string      `json:"author_username"`
+	AuthorAvatar   string      `json:"author_avatar"`
+	Content        string      `json:"content"`
+	MediaURL       string      `json:"media_url,omitempty"`
+	Media          []PostMedia `json:"media"`
+	Likes          int         `json:"likes"`
+	Retweets       int         `json:"retweets"`
+	Replies        int         `json:"replies"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 

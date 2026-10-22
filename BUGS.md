@@ -3,7 +3,7 @@
 Running list of defects and rough edges in XClone. Each entry gives the location, the problem,
 why it matters, and a suggested fix. Tick the box when fixed.
 
-Last updated: 2026-10-18
+Last updated: 2026-10-22
 
 ---
 
@@ -51,19 +51,32 @@ Last updated: 2026-10-18
 - **Fix:** Give the modal an `onMissing` callback (or pass the status to `onUpdated`) so a 404 from
   the edit path removes the post from the list as well, then closes.
 
-### 6. Three different ways of counting characters
-- [ ] **Location:** `frontend/app/dashboard/page.tsx:295, 308-322` vs
-  `frontend/components/post/EditPostModal.tsx:28` vs `backend/service/post_service.go:40`
-- **Problem:** Three counters disagree about what "280" means:
-  - backend: `len([]rune(content))` — Unicode code points
-  - edit modal: `[...content].length` — code points (matches the backend)
-  - dashboard composer: `tweetText.length` plus `maxLength={CHAR_LIMIT}` — **UTF-16 units**, so most
-    emoji count as 2
-- **Why it matters:** The composer is stricter than the server. A legal 200-emoji post is blocked
-  before it is ever sent, and the countdown number shown to the user is wrong for any text
-  containing emoji. It fails safe (never too permissive), which is why it is Medium and not High.
-- **Fix:** Use `[...tweetText].length` in the composer, drop the `maxLength` attribute (it also
-  counts UTF-16 units and cannot be made Unicode-aware), and rely on the existing `disabled` guard.
+### 5b. `EditProfileModal` leaks every preview URL it creates
+- [ ] **Location:** `frontend/components/profile/EditProfileModal.tsx` (`handleFileChange`)
+- **Problem:** `URL.createObjectURL(file)` is called for the avatar preview and
+  `URL.revokeObjectURL` is never called, so each selection pins its blob for the lifetime of the
+  page. A second, related defect in the same handler: the file input's `value` is never reset, so
+  re-selecting the *same* file fires no `onChange` and appears to do nothing.
+- **Why it matters:** The leak is small per selection but unbounded; the input reset is a visible
+  dead end for a user retrying the same file after an error.
+- **Fix:** Both are already done correctly in `app/dashboard/page.tsx`'s photo composer — copy
+  that pattern: revoke on removal, after a successful save, and in a `useEffect` cleanup, and set
+  `e.target.value = ""` before any early return.
+
+### 6. The composer still counts characters in UTF-16 units (partly fixed)
+- [ ] **Location:** `frontend/app/dashboard/page.tsx` — the `<textarea maxLength={CHAR_LIMIT}>`
+  attribute and the countdown `{CHAR_LIMIT - tweetText.length}`
+- **Problem:** The submit guard and the Post button's `disabled` expression were switched to
+  `[...tweetText].length` (code points, matching the backend's `len([]rune(...))`) while the photo
+  composer was built. Two UTF-16 counters remain in the same file:
+  - the `maxLength` attribute, which hard-stops typing at 280 **UTF-16 units**
+  - the countdown number, which is wrong for any text containing emoji
+- **Why it matters:** `maxLength` means a legal 280-emoji post still cannot be typed into the box,
+  even though the guards and the server would both accept it. It fails safe (never too permissive),
+  which is why it is Medium and not High.
+- **Fix:** Drop the `maxLength` attribute (it counts UTF-16 units and cannot be made Unicode-aware)
+  and use `[...tweetText].length` for the countdown. The `disabled` guard already blocks over-limit
+  text, so nothing is lost by removing the hard stop.
 
 ### 7. The number `280` and its message are duplicated
 - [ ] **Location:** `backend/service/post_service.go:14, 40`,
@@ -74,8 +87,11 @@ Last updated: 2026-10-18
   TypeScript.
 - **Why it matters:** Change the limit to 500 and the backend behaves correctly while telling users
   "exceeds 280 characters", and both frontend screens keep blocking at 280.
-- **Fix:** Backend: a `const MaxPostRunes = 280` with the message built via `fmt.Sprintf`. Frontend:
-  one shared constant imported by both files.
+- **Fix:** Backend: `const MaxPostRunes = 280` **now exists** in `service/post_service.go`, so
+  this is down to building the two message strings with `fmt.Sprintf`/`fmt.Errorf` from it — one in
+  `post_service.go` (`ErrContentTooLong`) and one in `post_controller.go` (`writePostError`).
+  Frontend: still one shared constant imported by both files. Note `MaxPostPhotos` in
+  `service/post_media.go` is already done this way, and is the pattern to copy.
 
 ---
 
@@ -106,6 +122,68 @@ Last updated: 2026-10-18
   contributor has no way to know which variables are required.
 - **Fix:** Commit `.env.example` listing `PORT`, `ENV`, `DATABASE_URL`, `JWT_SECRET`,
   `CLOUDINARY_*` with placeholder values. Pairs with issues 1 and 2.
+
+### 10b. Abandoned composer uploads leak Cloudinary assets
+- [ ] **Location:** `backend/controllers/upload_controller.go` (`UploadPostMediaHandler`), and the
+  same pattern in `UploadAvatarHandler`
+- **Problem:** Photos upload to Cloudinary *before* the post exists. Pick four photos, close the
+  tab, and four assets remain with no database row referencing them. Deleting a post has the same
+  shape: `ON DELETE CASCADE` removes the `post_media` rows, but the Cloudinary files stay.
+- **Why it matters:** Unbounded storage growth, and there is **no rate limiting anywhere in the
+  app**, so a single authenticated user can loop the upload endpoint and burn the account quota.
+- **Fix:** Every post photo is tagged `xclone_post_media`, so a reaper can list by tag through the
+  Admin API and destroy anything older than a day with no matching row. **Important:** `public_id`
+  is intentionally *not* unique — the same asset may be attached to two posts — so any delete path
+  must count references (`SELECT count(*) FROM post_media WHERE public_id = $1`) before calling
+  `uploader.Destroy`, or deleting one post will break another post's image.
+
+### 10c. Photos have no alt text
+- [ ] **Location:** `backend/database/postgres.go` (`post_media`), and the composer in
+  `frontend/app/dashboard/page.tsx`
+- **Problem:** There is no `alt_text` column and no field in the composer, so a screen reader has
+  nothing describing a post's photos.
+- **Why it matters:** Accessibility. It is cheapest to decide alongside the rendering grid, before
+  there is markup to retrofit.
+- **Fix:** Add `alt_text TEXT NOT NULL DEFAULT ''` to `post_media`, a per-photo input in the
+  composer, and use it for each `<img alt>` when the grid is built.
+
+### 10d. A misspelled key in `POST /api/posts` fails silently
+- [ ] **Location:** `backend/controllers/post_controller.go` (`CreatePostHandler`)
+- **Problem:** The JSON decoder does not call `DisallowUnknownFields()`, so a client that sends
+  `medias` instead of `media` (or `url` instead of `public_id`) gets **`201 Created` with a
+  text-only post** and no indication that its photos were dropped.
+- **Why it matters:** Silent data loss is worse than an error. It is also the one remaining soft
+  spot in the create contract now that media references are otherwise strictly validated.
+- **Fix:** `decoder := json.NewDecoder(r.Body); decoder.DisallowUnknownFields()` in
+  `CreatePostHandler` only — it is a behaviour change on an existing endpoint, so it was
+  deliberately held back rather than slipped in with the photo work.
+
+### 10e. Post photos are stored under a folder named for profile pictures
+- [ ] **Location:** `backend/.env` → `CLOUDINARY_UPLOAD_FOLDER` (currently
+  `Xclone/ProfilePicture`), consumed by `backend/controllers/upload_controller.go:192` and
+  `backend/service/post_media.go:64-65`; documented in `README.md:250`
+- **Problem:** A single `CLOUDINARY_UPLOAD_FOLDER` is shared by **both** upload endpoints, and it
+  is set to `Xclone/ProfilePicture`. So post photos land at
+  `Xclone/ProfilePicture/posts/<userID>/<token>` — nested inside a folder named for avatars —
+  while avatars land at `Xclone/ProfilePicture/avatar_<userID>_<unix>` beside them.
+  Two smaller problems travel with it:
+  - `README.md:250` documents the value as `xclone`, which does not match the real setting, so a
+    new contributor following the README gets a different folder layout than the one in use.
+  - The folder is baked into the `public_id` that `service/post_media.go` validates, so the var is
+    not purely cosmetic configuration — changing it changes what counts as a valid reference.
+- **Why it matters:** Nothing breaks: the paths are literal strings, `regexp.QuoteMeta` handles the
+  embedded `/`, and this layout is exercised by the live checks. It is a readability and
+  maintenance trap — anyone browsing the Cloudinary media library, or writing the orphan reaper
+  from issue 10b, will reasonably assume `ProfilePicture/` holds profile pictures.
+- **Fix:** Set `CLOUDINARY_UPLOAD_FOLDER=Xclone`. Avatars then sit at `Xclone/avatar_...` and post
+  photos at `Xclone/posts/<userID>/<token>`, separated by their own prefixes, and update
+  `README.md:250` to match. Safe to do: every already-stored URL lives in `users.avatar_url` and
+  `post_media.url`, so existing images keep resolving — only **new** uploads move. The one edge
+  case is a photo uploaded just before the change and posted just after, which would be rejected as
+  an invalid reference; harmless, and the user can re-pick the file.
+  If avatars and post photos should live in genuinely separate trees, the alternative is to split
+  the setting into `CLOUDINARY_AVATAR_FOLDER` and `CLOUDINARY_POST_FOLDER` and thread each to its
+  own consumer — more explicit, but two more env vars to keep in sync.
 
 ### 11. Backend is not `gofmt`-clean
 - [ ] **Location:** `models/model.go`, `utils/utils.go`, `controllers/post_controller.go`,
@@ -150,7 +228,13 @@ regressions.
   reverse-chronological; there is no follows table.
 - **"What's happening" is hardcoded.** `dashboard/page.tsx:371-387` — `#NextJS16 · 24.8K posts` is
   typed into the file.
-- **Posts are text-only.** `media_url` exists on the table, model, and response, and `CreatePost`
-  always writes `""`. The Cloudinary upload path is wired for avatars only.
+- **Photos are stored but not yet displayed.** Posts accept up to 4 photos, they upload to
+  Cloudinary, and they persist in `post_media` and come back in the API's `media` array — but
+  `PostCard` does not render them, so a photo post looks text-only (and a photo-only post looks
+  like an empty card) in the feed, on a profile, and on the post page. **This is expected, not a
+  regression**; the grid lands with the photo-CRUD work below.
+- **Photo CRUD on an existing post is unimplemented.** `UpdatePost` edits `content` only. Photos
+  are fixed at creation: they cannot be added, replaced, reordered, or removed afterwards. The
+  caption of a photo post *can* be edited or cleared.
 - **No test suite.** No `*_test.go`, no frontend test runner. Verification today is
   `go build ./... && go vet ./...`, `npm run lint`, and manual/curl checks.

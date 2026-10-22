@@ -20,7 +20,13 @@ func SetupRouter(
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
-	postService := service.NewPostService(postRepo)
+	// The service validates photo references, so it needs to know which
+	// Cloudinary cloud and folder our own uploads live in
+	postService := service.NewPostService(
+		postRepo,
+		cfg.CloudinaryCloudName,
+		cfg.CloudinaryUploadFolder,
+	)
 
 	// Initialize controllers
 	authController := controllers.NewAuthController(
@@ -57,6 +63,8 @@ func SetupRouter(
 
 	// User Profile & Media Upload endpoints
 	mux.HandleFunc("/api/upload/avatar", uploadController.UploadAvatarHandler)
+	//for instant post media upload, this 2nd route is used.
+	mux.HandleFunc("/api/upload/post-media", uploadController.UploadPostMediaHandler)
 	// profile update & get route
 	mux.HandleFunc("/api/users/profile", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut || r.Method == http.MethodPatch {

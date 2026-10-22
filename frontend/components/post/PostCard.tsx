@@ -5,6 +5,19 @@ import Link from "next/link";
 import UserAvatar from "../ui/UserAvatar";
 
 
+//One photo attached to a post. Mirrors models.PostMedia on the backend.
+//ordinal is the display position (0-3) and is assigned by the server, never
+//sent by the client. width/height are optional because the API omits them when
+//the dimensions are unknown.
+export interface PostMedia {
+  ordinal: number;
+  url: string;
+  public_id: string;
+  media_type?: string;
+  width?: number;
+  height?: number;
+}
+
 //The post data structure 
 export interface PostResponse {
   id: string;
@@ -14,6 +27,10 @@ export interface PostResponse {
   author_avatar?: string;
   content: string;
   media_url?: string;
+  //The API always sends this as an array, never null. It is optional here so
+  //that adding it does not ripple into the four files that import this type,
+  //and so a response cached from an older build cannot break the card.
+  media?: PostMedia[];
   likes: number;
   retweets: number;
   replies: number;

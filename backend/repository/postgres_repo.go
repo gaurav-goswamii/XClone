@@ -190,19 +190,29 @@ func NewPostgresPostRepository(db *sql.DB) *PostgresPostRepository {
 	return &PostgresPostRepository{db: db}
 }
 
-// Create inserts a new post record into the database
-func (r *PostgresPostRepository) Create(post *models.Post) error {
+// Create inserts a post and its photos in a single transaction, so a post is
+// never committed without the media that belongs to it
+func (r *PostgresPostRepository) Create(post *models.Post, media []models.PostMedia) error {
 	now := time.Now()
 	if post.CreatedAt.IsZero() {
 		post.CreatedAt = now
 	}
 	post.UpdatedAt = now
 
-	query := `
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	// Rollback returns sql.ErrTxDone once Commit has succeeded, so this is a
+	// no-op on the happy path and undoes everything on any early return
+	//defer = no error manually again and again.
+	defer func() { _ = tx.Rollback() }()
+
+	postQuery := `
 		INSERT INTO posts (id, user_id, content, media_url, likes, retweets, replies, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
-	_, err := r.db.Exec(query,
+	if _, err := tx.Exec(postQuery,
 		post.ID,
 		post.UserID,
 		post.Content,
@@ -212,8 +222,102 @@ func (r *PostgresPostRepository) Create(post *models.Post) error {
 		post.Replies,
 		post.CreatedAt,
 		post.UpdatedAt,
-	)
-	return err
+	); err != nil {
+		return err
+	}
+
+	mediaQuery := `
+		INSERT INTO post_media (post_id, ordinal, url, public_id, media_type, width, height)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	for i := range media {
+		// The column DEFAULT only applies when the column is omitted from the
+		// INSERT, and we always list it, so an empty value must be filled here
+		mediaType := strings.TrimSpace(media[i].MediaType)
+		if mediaType == "" {
+			mediaType = "image"
+		}
+		if _, err := tx.Exec(mediaQuery,
+			post.ID,
+			media[i].Ordinal,
+			media[i].URL,
+			media[i].PublicID,
+			mediaType,
+			media[i].Width,
+			media[i].Height,
+		); err != nil {
+			return err
+		}
+	}
+// it makes all transactions permanent.
+	return tx.Commit()
+}
+
+// mediaByPost loads the photos for many posts in one query, grouped by post ID.
+// This is what keeps a feed read at two round trips instead of one per post.
+func (r *PostgresPostRepository) mediaByPost(postIDs []string) (map[string][]models.PostMedia, error) {
+	grouped := make(map[string][]models.PostMedia, len(postIDs))
+	if len(postIDs) == 0 {
+		return grouped, nil
+	}
+
+	query := `
+		SELECT post_id, ordinal, url, public_id, media_type, width, height
+		FROM post_media
+		WHERE post_id = ANY($1)
+		ORDER BY post_id, ordinal
+	`
+	rows, err := r.db.Query(query, pq.Array(postIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var postID string
+		var media models.PostMedia
+		if err := rows.Scan(
+			&postID,
+			&media.Ordinal,
+			&media.URL,
+			&media.PublicID,
+			&media.MediaType,
+			&media.Width,
+			&media.Height,
+		); err != nil {
+			return nil, err
+		}
+		grouped[postID] = append(grouped[postID], media)
+	}
+	return grouped, rows.Err()
+}
+
+// attachMedia fills in the Media field of every post with one batched query.
+// Posts without photos get an empty slice, never nil, so the JSON is [] and
+// never null.
+func (r *PostgresPostRepository) attachMedia(posts []*models.PostResponse) error {
+	if len(posts) == 0 {
+		return nil
+	}
+
+	postIDs := make([]string, 0, len(posts))
+	for _, post := range posts {
+		postIDs = append(postIDs, post.ID)
+	}
+
+	grouped, err := r.mediaByPost(postIDs)
+	if err != nil {
+		return err
+	}
+
+	for _, post := range posts {
+		if media := grouped[post.ID]; media != nil {
+			post.Media = media
+		} else {
+			post.Media = []models.PostMedia{}
+		}
+	}
+	return nil
 }
 
 // GetByID retrieves a post by ID including author profile details
@@ -245,6 +349,10 @@ func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPostNotFound
 		}
+		return nil, err
+	}
+
+	if err := r.attachMedia([]*models.PostResponse{&post}); err != nil {
 		return nil, err
 	}
 	return &post, nil
@@ -295,7 +403,16 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 		}
 		posts = append(posts, &post)
 	}
-	return posts, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Release the connection before the media query instead of holding two
+	rows.Close()
+
+	if err := r.attachMedia(posts); err != nil {
+		return nil, err
+	}
+	return posts, nil
 }
 
 // ListByUser retrieves posts created by a specific user (identified by username)
@@ -344,7 +461,16 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 		}
 		posts = append(posts, &post)
 	}
-	return posts, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Release the connection before the media query instead of holding two
+	rows.Close()
+
+	if err := r.attachMedia(posts); err != nil {
+		return nil, err
+	}
+	return posts, nil
 }
 
 // Update changes the content of a post, scoped to its owner

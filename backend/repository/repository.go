@@ -22,7 +22,8 @@ type UserRepository interface {
 
 // PostRepository defines data access methods for posts
 type PostRepository interface {
-	Create(post *models.Post) error
+	// Create persists the post and its photos atomically; media may be empty
+	Create(post *models.Post, media []models.PostMedia) error
 	GetByID(id string) (*models.PostResponse, error)
 	ListFeed(limit, offset int) ([]*models.PostResponse, error)
 	ListByUser(username string, limit, offset int) ([]*models.PostResponse, error)

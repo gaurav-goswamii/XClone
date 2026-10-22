@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import UserAvatar from "../../components/ui/UserAvatar";
@@ -18,8 +18,27 @@ interface UserProfile {
   created_at?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL;
+// The `|| ""` matters: without it an unset NEXT_PUBLIC_API_URL makes every
+// request URL start with the literal string "undefined". Every other file in
+// the app already has this fallback.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const CHAR_LIMIT = 280;
+const MAX_PHOTOS = 4;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+// Mirrors the server's allow-list so the usual mistake costs no round trip
+const ACCEPTED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+// A photo the user has picked but not yet posted. It holds a local preview and,
+// once uploaded, the reference the create endpoint accepts.
+interface DraftPhoto {
+  key: string;
+  previewUrl: string;
+  status: "uploading" | "done" | "error";
+  error?: string;
+  public_id?: string;
+  width?: number;
+  height?: number;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -34,6 +53,21 @@ export default function DashboardPage() {
   const [postError, setPostError] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<PostResponse | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [draftPhotos, setDraftPhotos] = useState<DraftPhoto[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Object URLs must be revoked by hand or they leak for the page's lifetime.
+  // A ref lets the unmount cleanup see the current list without re-running.
+  const previewUrlsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    previewUrlsRef.current = draftPhotos.map((photo) => photo.previewUrl);
+  }, [draftPhotos]);
+
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -121,10 +155,134 @@ export default function DashboardPage() {
     router.replace("/login");
   };
 
+  // Upload one photo and patch its row in place. Rows are addressed by key, so
+  // a removal mid-flight simply means the patch finds nothing to update.
+  const uploadDraftPhoto = async (key: string, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      const res = await fetch(`${API_BASE}/api/upload/post-media`, {
+        method: "POST",
+        credentials: "include",
+        // No Content-Type header: the browser has to set the multipart boundary
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || data?.status !== "success" || !data?.data?.public_id) {
+        const message =
+          res.status === 413
+            ? "That photo is larger than 5MB."
+            : data?.message || "Upload failed. Please try again.";
+        setDraftPhotos((prev) =>
+          prev.map((photo) =>
+            photo.key === key ? { ...photo, status: "error", error: message } : photo
+          )
+        );
+        return;
+      }
+
+      setDraftPhotos((prev) =>
+        prev.map((photo) =>
+          photo.key === key
+            ? {
+                ...photo,
+                status: "done",
+                error: undefined,
+                public_id: data.data.public_id,
+                width: data.data.width,
+                height: data.data.height,
+              }
+            : photo
+        )
+      );
+    } catch {
+      setDraftPhotos((prev) =>
+        prev.map((photo) =>
+          photo.key === key
+            ? { ...photo, status: "error", error: "Network error while uploading." }
+            : photo
+        )
+      );
+    }
+  };
+
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files ?? []);
+    // Always reset the input, even on an early return, so picking the same file
+    // again still fires onChange
+    e.target.value = "";
+    if (picked.length === 0) return;
+
+    const remaining = MAX_PHOTOS - draftPhotos.length;
+    if (remaining <= 0) {
+      setPostError(`You can add up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
+
+    const accepted = picked.slice(0, remaining);
+    if (picked.length > remaining) {
+      setPostError(`You can add up to ${MAX_PHOTOS} photos.`);
+    } else {
+      setPostError(null);
+    }
+
+    const queued: { key: string; file: File }[] = [];
+    for (const file of accepted) {
+      if (!ACCEPTED_PHOTO_TYPES.includes(file.type)) {
+        setPostError("Photos must be JPEG, PNG, WEBP, or GIF.");
+        continue;
+      }
+      if (file.size > MAX_PHOTO_BYTES) {
+        setPostError("Each photo must be 5MB or smaller.");
+        continue;
+      }
+      queued.push({ key: crypto.randomUUID(), file });
+    }
+    if (queued.length === 0) return;
+
+    setDraftPhotos((prev) => [
+      ...prev,
+      ...queued.map(({ key, file }) => ({
+        key,
+        previewUrl: URL.createObjectURL(file),
+        status: "uploading" as const,
+      })),
+    ]);
+
+    // Sequentially, one request in flight at a time: bounds memory and makes
+    // failures easy to attribute. Display order comes from the array, not from
+    // whichever upload finishes first.
+    for (const { key, file } of queued) {
+      await uploadDraftPhoto(key, file);
+    }
+  };
+
+  const handleRemoveDraftPhoto = (key: string) => {
+    setDraftPhotos((prev) => {
+      const target = prev.find((photo) => photo.key === key);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((photo) => photo.key !== key);
+    });
+    setPostError(null);
+  };
+
   const handlePostTweet = async (e: React.FormEvent) => {
     e.preventDefault();
     const content = tweetText.trim();
-    if (!content || isPosting || content.length > CHAR_LIMIT) return;
+    const readyPhotos = draftPhotos.filter(
+      (photo) => photo.status === "done" && photo.public_id
+    );
+
+    if (isPosting) return;
+    // Posting mid-upload would silently drop the photos still in flight
+    if (draftPhotos.some((photo) => photo.status === "uploading")) return;
+    // A post needs text or photos, but no longer both
+    if (!content && readyPhotos.length === 0) return;
+    // Spread counts code points, matching the server's rune count
+    if ([...content].length > CHAR_LIMIT) return;
 
     setIsPosting(true);
     setPostError(null);
@@ -136,7 +294,14 @@ export default function DashboardPage() {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          media: readyPhotos.map((photo) => ({
+            public_id: photo.public_id,
+            width: photo.width,
+            height: photo.height,
+          })),
+        }),
       });
 
       const data = await res.json();
@@ -149,6 +314,8 @@ export default function DashboardPage() {
       if (data.data?.post) {
         setFeedPosts((prev) => [data.data.post, ...prev]);
         setTweetText("");
+        draftPhotos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+        setDraftPhotos([]);
       }
     } catch {
       setPostError("Network error. Could not post tweet.");
@@ -297,6 +464,52 @@ export default function DashboardPage() {
                 className="w-full bg-transparent text-[18px] text-[#e7e9ea] outline-none placeholder-[#71767b] resize-none min-h-[60px] disabled:opacity-50"
               />
 
+              {draftPhotos.length > 0 && (
+                <div className="mt-2 mb-3 grid grid-cols-2 gap-2 max-w-[400px]">
+                  {draftPhotos.map((photo, index) => (
+                    <div
+                      key={photo.key}
+                      className={`relative aspect-square rounded-xl overflow-hidden border ${
+                        photo.status === "error" ? "border-[#f4212e]" : "border-[#2f3336]"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.previewUrl}
+                        alt={`Selected photo ${index + 1} of ${draftPhotos.length}`}
+                        className="w-full h-full object-cover"
+                      />
+
+                      {photo.status === "uploading" && (
+                        <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+
+                      {photo.status === "error" && (
+                        <div className="absolute inset-0 bg-[#f4212e]/25 flex items-end">
+                          <p className="w-full px-2 py-1 text-[11px] leading-tight text-white bg-black/70">
+                            {photo.error || "Upload failed"}
+                          </p>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDraftPhoto(photo.key)}
+                        disabled={isPosting}
+                        aria-label={`Remove photo ${index + 1}`}
+                        className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 hover:bg-black/90 text-white flex items-center justify-center transition cursor-pointer disabled:opacity-50"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-current" strokeWidth="2.2">
+                          <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {postError && (
                 <div className="mb-2 text-xs text-[#f4212e] bg-[#f4212e]/10 py-1.5 px-3 rounded-lg border border-[#f4212e]/20">
                   {postError}
@@ -305,6 +518,39 @@ export default function DashboardPage() {
 
               <div className="flex items-center justify-between pt-2 border-t border-[#2f3336]">
                 <div className="flex items-center gap-3 text-[#71767b] text-xs">
+                  {/* The narrow accept list also makes iOS transcode HEIC to JPEG */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleFilesSelected}
+                    className="hidden"
+                    id="post-photo-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isPosting || draftPhotos.length >= MAX_PHOTOS}
+                    aria-label="Add photos"
+                    title={
+                      draftPhotos.length >= MAX_PHOTOS
+                        ? `You can add up to ${MAX_PHOTOS} photos`
+                        : "Add photos"
+                    }
+                    className="w-8 h-8 -ml-1 rounded-full flex items-center justify-center text-[#1d9bf0] hover:bg-[#1d9bf0]/10 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-none stroke-current" strokeWidth="1.8">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.6" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L5 21" />
+                    </svg>
+                  </button>
+                  {draftPhotos.length > 0 && (
+                    <span className="text-[#71767b]">
+                      {draftPhotos.length}/{MAX_PHOTOS}
+                    </span>
+                  )}
                   {tweetText.length > 0 && (
                     <span
                       className={`font-mono text-xs ${
@@ -319,7 +565,13 @@ export default function DashboardPage() {
                 </div>
                 <button
                   type="submit"
-                  disabled={!tweetText.trim() || isPosting || tweetText.length > CHAR_LIMIT}
+                  disabled={
+                    isPosting ||
+                    draftPhotos.some((photo) => photo.status === "uploading") ||
+                    (!tweetText.trim() &&
+                      !draftPhotos.some((photo) => photo.status === "done")) ||
+                    [...tweetText].length > CHAR_LIMIT
+                  }
                   className="px-4 py-1.5 rounded-full bg-[#1d9bf0] text-white font-bold text-sm hover:bg-[#1a8cd8] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition flex items-center gap-2"
                 >
                   {isPosting ? (

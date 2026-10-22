@@ -147,15 +147,90 @@ XClone/
 ### Posts & Timelines
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/posts` | Create a new tweet / post | Yes |
+| `POST` | `/api/posts` | Create a post, with up to 4 optional photos | Yes |
 | `GET` | `/api/posts/feed` | Retrieve global chronological timeline feed (`?limit=20&offset=0`) | No |
 | `GET` | `/api/posts/user` | Retrieve posts by a specific username (`?username=&limit=20&offset=0`) | No |
+
+#### Creating a post with photos
+
+Photos are attached in two steps. Upload each file to `POST /api/upload/post-media` first,
+then pass the `public_id` values it returns to `POST /api/posts`:
+
+```json
+{
+  "content": "optional caption",
+  "media": [
+    { "public_id": "xclone/posts/usr_abc/9f2c4e7a1b3d5f08", "width": 2048, "height": 1365 }
+  ]
+}
+```
+
+- **Up to 4 photos** per post.
+- **`content` is optional when at least one photo is attached** — a photo-only post is
+  valid. A post with neither text nor photos is rejected with `400`.
+- **Only `public_id` is accepted; the server builds the URL.** A `url` supplied by the
+  client is ignored, and a `public_id` that does not belong to the caller's own uploads is
+  rejected with `400`.
+- `width` and `height` are optional hints used to reserve layout space.
+
+Every post in a response carries a `media` array, ordered by `ordinal` (0-3), which is
+always present and never `null`:
+
+```json
+"media": [
+  { "ordinal": 0, "url": "https://res.cloudinary.com/...", "public_id": "xclone/posts/...",
+    "media_type": "image", "width": 2048, "height": 1365 }
+]
+```
+
+The older `media_url` field is **legacy**: it mirrors the first photo's URL for backwards
+compatibility. `media[]` is authoritative.
+
+| Error | Status |
+| :--- | :---: |
+| No text and no photos | `400` |
+| More than 4 photos | `400` |
+| `public_id` not one of the caller's own uploads | `400` |
+| Request body over 64KB | `413` |
+| Cloudinary not configured (only when photos are attached) | `503` |
 
 ### Media & System
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/upload/avatar` | Upload an avatar image to Cloudinary (multipart form) | Yes |
+| `POST` | `/api/upload/avatar` | Upload an avatar image to Cloudinary (multipart, field `avatar`) | Yes |
+| `POST` | `/api/upload/post-media` | Upload one post photo to Cloudinary (multipart, field `photo`) | Yes |
 | `GET` | `/api/health` | Health check probe endpoint | No |
+
+#### Upload endpoint details
+
+Both upload endpoints take a single file as `multipart/form-data` and talk to Cloudinary
+directly; neither writes to the database. The returned reference is persisted by a separate
+request (`PUT /api/users/profile` for an avatar, `POST /api/posts` for a photo).
+
+| | `/api/upload/avatar` | `/api/upload/post-media` |
+| :--- | :--- | :--- |
+| Form field | `avatar` | `photo` |
+| Max size | 5MB | 5MB |
+| Accepted types | JPEG, PNG, WEBP, GIF | JPEG, PNG, WEBP, GIF |
+| Transformation | `c_thumb,g_face,w_400,h_400` (square face crop) | `c_limit,w_2048,h_2048` (aspect ratio preserved) |
+| Returns | `avatar_url` | `public_id`, `width`, `height`, `url` |
+
+The type is determined by **sniffing the file's first bytes**, not its extension or the
+client's `Content-Type` — so a text file renamed `.jpg` is rejected. HEIC/HEIF is not
+recognised and is rejected; iOS normally converts to JPEG on upload.
+
+Post photos are re-encoded at upload time and capped at 2048px on the long edge. Because
+Cloudinary re-encodes, the stored image has its EXIF orientation applied and its metadata
+(including GPS coordinates) stripped.
+
+| Error | Status |
+| :--- | :---: |
+| Missing or invalid auth cookie | `401` |
+| Wrong HTTP method | `405` |
+| Missing file, or an unaccepted image type | `400` |
+| File larger than 5MB | `413` |
+| Cloudinary credentials not configured | `503` |
+| Cloudinary rejected the upload | `502` |
 
 ---
 

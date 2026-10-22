@@ -29,6 +29,8 @@
 - Database schema lives in `backend/database/postgres.go` → `Migrate()`: raw idempotent SQL re-run on every boot. There is no migration tool — do not add migration files.
 - Auth is enforced per handler (read the `x_auth_token` cookie, then `utils.ValidateJWT`). `backend/middleware/` is CORS + logging only — do not move auth there.
 - `frontend/proxy.ts` is Next.js 16's renamed `middleware.ts`. It decodes the JWT `exp` only and does not verify the signature: a deliberate UX gate, not a security boundary. Do not rename or "fix" it.
+- Post photos live in `post_media`, keyed by `(post_id, ordinal)` with `ordinal` 0-3 — the composite primary key plus a `CHECK` are what cap a post at 4 photos, so do not rely on Go validation alone. `posts.media_url` is a legacy mirror of the first photo; `media[]` is authoritative.
+- Photo uploads are two-step: `POST /api/upload/post-media` returns a `public_id`, and `POST /api/posts` accepts **only that `public_id` and builds the URL server-side**. Never let the client supply a media URL — that check in `service/post_media.go` is what stops a post pointing at a host we do not control, or at another user's upload.
 
 ## Checks
 - Backend: `cd backend && go build ./... && go vet ./...`

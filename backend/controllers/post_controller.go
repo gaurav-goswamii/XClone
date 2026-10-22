@@ -54,6 +54,16 @@ func writePostError(w http.ResponseWriter, err error, fallback string) {
 		writeError(w, http.StatusBadRequest, "post content cannot be empty")
 	case errors.Is(err, service.ErrContentTooLong):
 		writeError(w, http.StatusBadRequest, "post content exceeds 280 characters")
+	case errors.Is(err, service.ErrEmptyPost):
+		writeError(w, http.StatusBadRequest, "post must have text or at least one photo")
+	case errors.Is(err, service.ErrTooManyPhotos):
+		writeError(w, http.StatusBadRequest, "a post can have at most 4 photos")
+	case errors.Is(err, service.ErrInvalidMediaRef):
+		writeError(w, http.StatusBadRequest, "invalid photo reference")
+	case errors.Is(err, service.ErrMediaNotConfigured):
+		// Mirrors the upload endpoint's 503, so a deploy missing its Cloudinary
+		// settings fails the same recognisable way at both steps
+		writeError(w, http.StatusServiceUnavailable, "media uploads are not configured")
 	case errors.Is(err, service.ErrUnauthorizedPost):
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 	default:
@@ -61,9 +71,26 @@ func writePostError(w http.ResponseWriter, err error, fallback string) {
 	}
 }
 
+// maxPostBodyBytes caps the create request body. 280 runes of text plus four
+// public IDs sits comfortably under 1KB, so this is already generous.
+const maxPostBodyBytes = 64 << 10
+
+// CreatePostMediaRequest references a photo already uploaded through
+// POST /api/upload/post-media.
+//
+// There is deliberately no url field. The caller names an asset and the service
+// builds the URL, so the wire contract cannot be used to point a post at a host
+// we do not control.
+type CreatePostMediaRequest struct {
+	PublicID string `json:"public_id"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+}
+
 // CreatePostRequest represents request body for creating a post
 type CreatePostRequest struct {
-	Content string `json:"content"`
+	Content string                   `json:"content"`
+	Media   []CreatePostMediaRequest `json:"media"`
 }
 
 // CreatePostHandler handles POST /api/posts
@@ -78,13 +105,32 @@ func (c *PostController) CreatePostHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Bound the body before decoding; this endpoint had no limit at all
+	r.Body = http.MaxBytesReader(w, r.Body, maxPostBodyBytes)
+
 	var req CreatePostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body is too large")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	post, err := c.postService.CreatePost(claims.UserID, req.Content)
+	// Translate the wire shape into the service's own type. The controller
+	// carries the references across; it does not judge them.
+	refs := make([]service.MediaRef, 0, len(req.Media))
+	for _, media := range req.Media {
+		refs = append(refs, service.MediaRef{
+			PublicID: media.PublicID,
+			Width:    media.Width,
+			Height:   media.Height,
+		})
+	}
+
+	post, err := c.postService.CreatePost(claims.UserID, req.Content, refs)
 	if err != nil {
 		writePostError(w, err, "failed to create post")
 		return

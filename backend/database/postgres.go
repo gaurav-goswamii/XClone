@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
-
 	_ "github.com/lib/pq"
 )
 
@@ -65,6 +64,22 @@ func Migrate(db *sql.DB) error {
 
 	CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts (user_id);
 	CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts (created_at DESC);
+
+	-- Photos attached to a post, in display order. Max 4 enforced by the CHECK
+	-- plus the composite primary key. public_id is intentionally NOT unique: the
+	-- same Cloudinary asset may appear on more than one post, so any future delete
+	-- path must count references before destroying the remote asset.
+	CREATE TABLE IF NOT EXISTS post_media (
+		post_id VARCHAR(64) NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+		ordinal SMALLINT NOT NULL CHECK (ordinal >= 0 AND ordinal <= 3),
+		url TEXT NOT NULL,
+		public_id TEXT NOT NULL,
+		media_type VARCHAR(20) NOT NULL DEFAULT 'image',
+		width INT NOT NULL DEFAULT 0,
+		height INT NOT NULL DEFAULT 0,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (post_id, ordinal)
+	);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
