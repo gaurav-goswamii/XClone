@@ -30,7 +30,9 @@ XClone/
 │   │   │   ├── AccountPill.tsx             # Floating user badge in sidebar
 │   │   │   └── AccountPopover.tsx          # Logout & account switch dropdown
 │   │   ├── post/                           # Post feed & timeline components
-│   │   │   └── PostCard.tsx                # Tweet card with relative timestamps & actions
+│   │   │   ├── EditPostModal.tsx           # Edit & delete modal for a user's own post
+│   │   │   ├── PostCard.tsx                # Tweet card: relative timestamps, photo grid, actions
+│   │   │   └── PostCard.test.tsx           # Vitest + React Testing Library unit tests
 │   │   ├── profile/                        # User profile components
 │   │   │   └── EditProfileModal.tsx        # Profile editing modal (Avatar, Banner, Bio)
 │   │   └── ui/                             # Shared atomic components
@@ -40,9 +42,11 @@ XClone/
 │   ├── next.config.ts                      # Next.js config with remote image domains
 │   ├── package.json                        # Dependencies & build scripts
 │   ├── postcss.config.mjs                  # PostCSS configuration
-│   └── tsconfig.json                       # TypeScript compiler configuration
+│   ├── tsconfig.json                       # TypeScript compiler configuration
+│   └── vitest.config.ts                    # Vitest + jsdom test configuration
 │
 ├── backend/                                # Go (Golang) REST API Server
+│   ├── .env.example                        # Template for backend/.env — copy and fill in
 │   ├── config/                             # Environment parser & server configuration
 │   │   └── config.go
 │   ├── controllers/                        # HTTP controllers & request handlers
@@ -53,7 +57,7 @@ XClone/
 │   ├── database/                           # Database connection & schema setup
 │   │   └── postgres.go                     # PostgreSQL pooling & table migrations
 │   ├── middleware/                         # HTTP middleware stack
-│   │   └── middleware.go                   # CORS, Structured Logger, JWT Authentication
+│   │   └── middleware.go                   # CORS & structured request logging only
 │   ├── models/                             # Domain models & entities
 │   │   └── model.go                        # User & Post data structures
 │   ├── repository/                         # Persistence abstraction layer
@@ -63,6 +67,7 @@ XClone/
 │   │   └── routes.go                       # Route registration & dependency injection
 │   ├── service/                            # Core business logic layer
 │   │   ├── auth_service.go                 # Registration, login, validation & hashing
+│   │   ├── post_media.go                   # Photo validation & public_id ownership checks
 │   │   └── post_service.go                 # Post creation & timeline retrieval logic
 │   ├── utils/                              # Cryptographic & utility helpers
 │   │   ├── auth.go                         # JWT token creation, parsing & validation
@@ -72,6 +77,7 @@ XClone/
 │   └── main.go                             # Backend server initialization & entrypoint
 │
 ├── .gitignore                              # Root git ignore rules
+├── LICENSE                                 # MIT license
 └── README.md                               # Project documentation
 ```
 
@@ -85,16 +91,19 @@ XClone/
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **State & Route Guards**: Next.js Proxy/Middleware with JWT cookie evaluation
+- **State & Route Guards**: `proxy.ts` reads the session cookie's expiry to gate routes (a UX
+  redirect, not a security boundary — every protected endpoint re-validates the JWT server-side)
 
 ### Backend
-- **Language**: [Go (Golang 1.23+)](https://go.dev/)
+- **Language**: [Go (Golang 1.26+)](https://go.dev/)
 - **Architecture**: Clean / Layered Architecture (`Controller` -> `Service` -> `Repository`)
 - **Database**: PostgreSQL 16 with automated schema migration, indexed queries, and Docker Compose orchestration
 - **Authentication**: JWT (`golang-jwt/jwt/v5`) stored in HTTP-only secure cookies (`x_auth_token`)
 - **Password Hashing**: `golang.org/x/crypto/bcrypt`
 - **Cloud Storage**: Cloudinary Go SDK for media uploads
 - **Router**: Go standard library `http.ServeMux` with modular middleware chaining
+- **Middleware**: CORS and structured request logging. Authentication is enforced per handler
+  (read the `x_auth_token` cookie, then validate the JWT), not in the middleware chain.
 
 ---
 
@@ -236,22 +245,45 @@ Cloudinary re-encodes, the stored image has its EXIF orientation applied and its
 
 ## ⚙️ Environment Configuration
 
-### Backend Configuration (`backend/.env`)
-Create a `.env` file in the `backend/` folder:
+No real credentials are committed to this repository. All three files below are gitignored;
+`backend/.env.example` is the committed template.
 
-```env
-PORT=8080
-ENV=development
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/xclone?sslmode=disable
-JWT_SECRET=your-secure-jwt-secret-key
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-CLOUDINARY_UPLOAD_FOLDER=xclone
+### Backend (`backend/.env`)
+
+Copy the template and fill in your own values:
+
+```bash
+cp backend/.env.example backend/.env
 ```
 
-### Frontend Configuration (`frontend/.env.local`)
-Create a `.env.local` file in the `frontend/` folder:
+| Variable | Required | Notes |
+| :--- | :---: | :--- |
+| `DATABASE_URL` | **Yes** | The server calls `log.Fatal` at boot if unset. Must match the `POSTGRES_*` values below. |
+| `JWT_SECRET` | **Yes** | Signs session JWTs. The server calls `log.Fatal` at boot if unset. Generate with `openssl rand -base64 32`. |
+| `PORT` | **Yes** | Not defaulted in code: if unset, the server binds an arbitrary free port and the frontend cannot reach it. |
+| `ENV` | No | `development` or `production`; logged at boot. |
+| `CLOUDINARY_CLOUD_NAME` | No | All three Cloudinary values are needed for uploads. |
+| `CLOUDINARY_API_KEY` | No | Without them the app still runs, but avatar and photo uploads answer `503` and a warning is logged at boot. |
+| `CLOUDINARY_API_SECRET` | No | |
+| `CLOUDINARY_UPLOAD_FOLDER` | No | Folder prefix for uploaded assets. |
+
+### Database (`.env` at the repository root)
+
+`compose.yaml` reads these three variables to initialise the PostgreSQL container, so Docker
+Compose needs a `.env` in the repository root (the same directory as `compose.yaml`):
+
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=xclone
+```
+
+These must agree with the credentials in `DATABASE_URL`.
+
+### Frontend (`frontend/.env.local`)
+
+Create a `.env.local` file in the `frontend/` folder. `NEXT_PUBLIC_API_URL` must point at the
+backend's `PORT`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8080
@@ -262,16 +294,18 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 ## 🚀 Getting Started
 
 ### 1. Prerequisites
-- **Node.js**: v18.0.0 or higher
+- **Node.js**: v20.9.0 or higher (required by Next.js 16)
 - **npm**: v9.0.0 or higher
-- **Go**: v1.23.0 or higher
+- **Go**: v1.26.0 or higher (set by `backend/go.mod`)
 - **Docker & Docker Compose**: (Recommended for PostgreSQL) or local PostgreSQL v14+
 
 ---
 
 ### 2. Database Setup
 
-Start the PostgreSQL 16 container using the provided `compose.yaml`:
+Create the root `.env` described above first — `compose.yaml` reads `POSTGRES_USER`,
+`POSTGRES_PASSWORD`, and `POSTGRES_DB` from it, and the container will not initialise
+correctly if they are empty. Then start the PostgreSQL 16 container:
 
 ```bash
 docker compose up -d
@@ -323,19 +357,28 @@ The frontend application runs on `http://localhost:3000`.
 
 ## 🧪 Quality Assurance & Pre-commit Verification
 
-Before submitting changes, run the test suites and linters:
+Before submitting changes, run the linters and tests:
 
 ```bash
-# Verify backend Go code
+# Backend: compile and vet
 cd backend
+go build ./...
 go vet ./...
-go build -o /dev/null ./...
 
-# Verify frontend Next.js code
+# Frontend: lint, test, and production build
 cd ../frontend
 npm run lint
+npx vitest run
 npm run build
 ```
+
+Use `npx vitest run` for a one-shot run. `npm test` is bare `vitest`, which starts an
+interactive watch process and never exits — it is not suitable for CI or scripted checks.
+
+**Test coverage is currently partial.** `frontend/components/post/PostCard.test.tsx` is the
+only test file, covering whether a post renders an attached photo or falls back to text-only. The Go backend has no
+automated test suite yet; the repository-layer interfaces in `backend/repository/repository.go`
+exist partly to make that straightforward to add.
 
 ---
 
