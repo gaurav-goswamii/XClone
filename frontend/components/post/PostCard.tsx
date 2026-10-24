@@ -27,9 +27,6 @@ export interface PostResponse {
   author_avatar?: string;
   content: string;
   media_url?: string;
-  //The API always sends this as an array, never null. It is optional here so
-  //that adding it does not ripple into the four files that import this type,
-  //and so a response cached from an older build cannot break the card.
   media?: PostMedia[];
   likes: number;
   retweets: number;
@@ -211,8 +208,22 @@ export default function PostCard({
 
         {/* Text-Only Post Body */}
         <p className="mt-1 text-[15px] leading-relaxed text-[#e7e9ea] break-words whitespace-pre-line">
-          {post.content}
+          {post.content} 
         </p>
+        
+        {/* Media Section */}
+        {post.media && post.media.length > 0 && (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {post.media.map((media)=> (
+              <img 
+              key={media.ordinal}
+              src={media.url}
+              alt="Post Image"
+              className="w-full h-auto rounded-xl object-cover"/>
+            ))}
+            </div>
+        )}
+
 
         {/* Action Buttons Bar */}
         <div className="mt-3 flex items-center justify-between max-w-md text-[#71767b] text-xs">

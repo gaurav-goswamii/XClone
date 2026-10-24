@@ -35,4 +35,6 @@
 ## Checks
 - Backend: `cd backend && go build ./... && go vet ./...`
 - Frontend: `cd frontend && npm run lint`
-- There is no test suite yet, so there are no tests to run. Say so instead of inventing one.
+- Frontend tests: `cd frontend && npx vitest run` — one-shot. `npm test` is bare `vitest`, i.e. watch mode, so it never exits; do not use it for an automated check.
+- Test stack is Vitest + jsdom + React Testing Library, configured in `frontend/vitest.config.ts`.
+- Coverage is partial: `frontend/components/post/PostCard.test.tsx` is the only test file so far. There is no backend test suite — say so instead of inventing one.
