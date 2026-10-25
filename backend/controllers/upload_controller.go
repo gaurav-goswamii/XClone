@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cloudinary/cloudinary-go/v2"
-	"github.com/cloudinary/cloudinary-go/v2/api"
-	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"github.com/cloudinary/cloudinary-go/v2"
+	"github.com/cloudinary/cloudinary-go/v2/api"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 )
 
 // Shared limits for every image upload endpoint
@@ -208,6 +209,35 @@ func (c *UploadController) uploadImage(ctx context.Context, src io.Reader, param
 		return nil, errors.New("cloudinary returned no asset for the upload")
 	}
 	return result, nil
+}
+
+func (c *UploadController) deleteImage(
+	ctx context.Context,
+	publicID string,
+) error {
+	cld, err := cloudinary.NewFromParams(
+		c.cloudName,
+		c.apiKey,
+		c.apiSecret,
+	)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errCloudinaryInit, err)
+	}
+
+	result, err := cld.Upload.Destroy(ctx, uploader.DestroyParams{
+		PublicID:     publicID,
+		ResourceType: "image",
+	})
+	if err != nil {
+		return err
+	}
+	if result.Error.Message != "" {
+		return fmt.Errorf(
+			"Cloudinary rejected deletion: %s",
+			result.Error.Message,
+		)
+	}
+	return nil
 }
 
 // writeUploadError maps an upload failure onto a status code

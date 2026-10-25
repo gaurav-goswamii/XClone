@@ -22,10 +22,18 @@ func SetupRouter(
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	// The service validates photo references, so it needs to know which
 	// Cloudinary cloud and folder our own uploads live in
+	
+	photoDeleter := service.NewCloudinaryPhotoDeleter(
+		cfg.CloudinaryCloudName,
+		cfg.CloudinaryAPIKey,
+		cfg.CloudinaryAPISecret,
+	)
+	
 	postService := service.NewPostService(
 		postRepo,
 		cfg.CloudinaryCloudName,
 		cfg.CloudinaryUploadFolder,
+		photoDeleter,
 	)
 
 	// Initialize controllers

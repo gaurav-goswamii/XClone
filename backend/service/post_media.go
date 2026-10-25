@@ -9,8 +9,6 @@ import (
 )
 
 const (
-	// MaxPostPhotos is the number of photos a single post may carry. The
-	// database enforces the same ceiling through a CHECK on post_media.ordinal.
 	MaxPostPhotos = 4
 
 	// maxMediaDimension bounds the client-reported pixel sizes. They are only

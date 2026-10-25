@@ -494,6 +494,39 @@ func (r *PostgresPostRepository) Update(id, userID, content string) error {
 	return nil
 }
 
+func (r *PostgresPostRepository) GetMediaByPostID(postID string,)([]models.PostMedia, error){
+	query := `SELECT ordinal, url, public_id, media_type, width, height
+		FROM post_media
+		WHERE post_id = $1
+		ORDER BY ordinal`
+	rows, err := r.db.Query(query, strings.TrimSpace(postID))
+	if err!= nil {
+		return nil, err
+	}	
+	defer rows.Close()
+	var media []models.PostMedia
+
+	for rows.Next() {
+		var item models.PostMedia
+
+		if err := rows.Scan(
+			&item.Ordinal,
+			&item.URL,
+		&item.PublicID,
+		&item.MediaType,
+		&item.Width,
+		&item.Height,
+		); err != nil {
+			return nil, err
+		}
+		media = append(media, item)
+	}
+	 if err := rows.Err(); err != nil {
+		return nil, err
+	 }
+	 return media, nil
+}
+
 // Delete permanently removes a post, scoped to its owner
 func (r *PostgresPostRepository) Delete(id, userID string) error {
 	query := `

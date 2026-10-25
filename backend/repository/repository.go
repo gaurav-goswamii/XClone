@@ -29,5 +29,6 @@ type PostRepository interface {
 	ListByUser(username string, limit, offset int) ([]*models.PostResponse, error)
 	Update(id, userID, content string) error
 	Delete(id, userID string) error
+	GetMediaByPostID(postID string) ([]models.PostMedia, error)
 }
 

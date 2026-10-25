@@ -1,12 +1,13 @@
 package service
 
 import (
-	"errors"
-	"strings"
-	"time"
 	"backend/models"
 	"backend/repository"
 	"backend/utils"
+	"context"
+	"errors"
+	"strings"
+	"time"
 )
 
 // MaxPostRunes is the longest a post's text may be, counted in Unicode code
@@ -28,15 +29,23 @@ type PostService struct {
 	postRepo repository.PostRepository
 	// media validates client-supplied photo references. It lives here because
 	// "where our media is allowed to come from" is a business rule: putting it
-	// in the controller would make the transport layer the security boundary.
+	// in the controller would make the transport layer the security boundary
 	media mediaResolver
+	photoDeleter PhotoDeleter
 }
 
+type PhotoDeleter interface {
+	DeletePhoto(ctx context.Context, publicID string) error
+}
+
+
+
 // NewPostService creates a new instance of PostService
-func NewPostService(postRepo repository.PostRepository, cloudName, uploadFolder string) *PostService {
+func NewPostService(postRepo repository.PostRepository, cloudName, uploadFolder string, photoDeleter PhotoDeleter,) *PostService {
 	return &PostService{
 		postRepo: postRepo,
 		media:    mediaResolver{cloudName: cloudName, uploadFolder: uploadFolder},
+		photoDeleter: photoDeleter,
 	}
 }
 
@@ -186,5 +195,20 @@ func (s *PostService) DeletePost(userID, postID string) error {
 		return ErrNotPostOwner
 	}
 
-	return s.postRepo.Delete(trimmedPostID, trimmedUserID)
+	media, err := s.postRepo.GetMediaByPostID(trimmedPostID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.postRepo.Delete(trimmedPostID, trimmedUserID); err != nil {
+		return err
+	}
+
+	for _, item := range media {
+		if err := s.photoDeleter.DeletePhoto(context.Background(), item.PublicID); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
