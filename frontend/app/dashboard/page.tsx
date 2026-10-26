@@ -6,6 +6,13 @@ import UserAvatar from "../../components/ui/UserAvatar";
 import AccountPill from "../../components/navigation/AccountPill";
 import PostCard, { PostResponse } from "../../components/post/PostCard";
 import EditPostModal from "../../components/post/EditPostModal";
+import {
+  DraftPhoto,
+  MAX_PHOTOS,
+  rejectPhotoFile,
+  toMediaPayload,
+  uploadPostPhoto,
+} from "../../lib/postPhotos";
 
 interface UserProfile {
   id: string;
@@ -23,22 +30,6 @@ interface UserProfile {
 // the app already has this fallback.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const CHAR_LIMIT = 280;
-const MAX_PHOTOS = 4;
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-// Mirrors the server's allow-list so the usual mistake costs no round trip
-const ACCEPTED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-
-// A photo the user has picked but not yet posted. It holds a local preview and,
-// once uploaded, the reference the create endpoint accepts.
-interface DraftPhoto {
-  key: string;
-  previewUrl: string;
-  status: "uploading" | "done" | "error";
-  error?: string;
-  public_id?: string;
-  width?: number;
-  height?: number;
-}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -158,55 +149,23 @@ export default function DashboardPage() {
   // Upload one photo and patch its row in place. Rows are addressed by key, so
   // a removal mid-flight simply means the patch finds nothing to update.
   const uploadDraftPhoto = async (key: string, file: File) => {
-    try {
-      const formData = new FormData();
-      formData.append("photo", file);
+    const result = await uploadPostPhoto(file);
 
-      const res = await fetch(`${API_BASE}/api/upload/post-media`, {
-        method: "POST",
-        credentials: "include",
-        // No Content-Type header: the browser has to set the multipart boundary
-        body: formData,
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || data?.status !== "success" || !data?.data?.public_id) {
-        const message =
-          res.status === 413
-            ? "That photo is larger than 5MB."
-            : data?.message || "Upload failed. Please try again.";
-        setDraftPhotos((prev) =>
-          prev.map((photo) =>
-            photo.key === key ? { ...photo, status: "error", error: message } : photo
-          )
-        );
-        return;
-      }
-
-      setDraftPhotos((prev) =>
-        prev.map((photo) =>
-          photo.key === key
-            ? {
-                ...photo,
-                status: "done",
-                error: undefined,
-                public_id: data.data.public_id,
-                width: data.data.width,
-                height: data.data.height,
-              }
-            : photo
-        )
-      );
-    } catch {
-      setDraftPhotos((prev) =>
-        prev.map((photo) =>
-          photo.key === key
-            ? { ...photo, status: "error", error: "Network error while uploading." }
-            : photo
-        )
-      );
-    }
+    setDraftPhotos((prev) =>
+      prev.map((photo) => {
+        if (photo.key !== key) return photo;
+        return result.ok
+          ? {
+              ...photo,
+              status: "done" as const,
+              error: undefined,
+              public_id: result.public_id,
+              width: result.width,
+              height: result.height,
+            }
+          : { ...photo, status: "error" as const, error: result.error };
+      })
+    );
   };
 
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -231,12 +190,9 @@ export default function DashboardPage() {
 
     const queued: { key: string; file: File }[] = [];
     for (const file of accepted) {
-      if (!ACCEPTED_PHOTO_TYPES.includes(file.type)) {
-        setPostError("Photos must be JPEG, PNG, WEBP, or GIF.");
-        continue;
-      }
-      if (file.size > MAX_PHOTO_BYTES) {
-        setPostError("Each photo must be 5MB or smaller.");
+      const rejection = rejectPhotoFile(file);
+      if (rejection) {
+        setPostError(rejection);
         continue;
       }
       queued.push({ key: crypto.randomUUID(), file });
@@ -296,11 +252,7 @@ export default function DashboardPage() {
         credentials: "include",
         body: JSON.stringify({
           content,
-          media: readyPhotos.map((photo) => ({
-            public_id: photo.public_id,
-            width: photo.width,
-            height: photo.height,
-          })),
+          media: toMediaPayload(readyPhotos),
         }),
       });
 

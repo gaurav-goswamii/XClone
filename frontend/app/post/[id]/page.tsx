@@ -171,7 +171,7 @@ export default function PostDetailPage({ params }: PageProps) {
       </main>
 
       {/* Edit Post Modal */}
-      {post && (
+      {post && isEditOpen && (
         <EditPostModal
           isOpen={isEditOpen}
           post={post}

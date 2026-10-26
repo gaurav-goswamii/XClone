@@ -66,12 +66,8 @@ func (m mediaResolver) publicIDPattern(userID string) (*regexp.Regexp, error) {
 	return regexp.Compile("^" + optionalFolder + owned + mediaTokenPattern + "$")
 }
 
-// resolve validates every reference and returns rows ready to persist.
-//
-// This is the security boundary for post photos. POST /api/posts carries JSON,
-// so a caller can put any string in a media field. Accepting only an opaque
-// public ID and formatting the URL here means a caller cannot point a post at
-// a host we do not control, nor at another user's upload.
+
+// converts client-supplied image references into validated PostMedia records that the repository can save.
 func (m mediaResolver) resolve(userID string, refs []MediaRef) ([]models.PostMedia, error) {
 	if len(refs) == 0 {
 		return nil, nil

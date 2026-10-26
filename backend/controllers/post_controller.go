@@ -75,22 +75,42 @@ func writePostError(w http.ResponseWriter, err error, fallback string) {
 // public IDs sits comfortably under 1KB, so this is already generous.
 const maxPostBodyBytes = 64 << 10
 
-// CreatePostMediaRequest references a photo already uploaded through
-// POST /api/upload/post-media.
+// PostMediaRequest references a photo already uploaded through
+// POST /api/upload/post-media. Creating and editing a post speak the same
+// wire language, so both decode into this type.
 //
 // There is deliberately no url field. The caller names an asset and the service
 // builds the URL, so the wire contract cannot be used to point a post at a host
 // we do not control.
-type CreatePostMediaRequest struct {
+//
+// The json tags are load-bearing rather than decorative: encoding/json matches
+// keys case-insensitively but not across punctuation, so without them an
+// incoming "public_id" would never reach PublicID and every photo would arrive
+// anonymous.
+type PostMediaRequest struct {
 	PublicID string `json:"public_id"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
 }
 
+// toMediaRefs translates the wire shape into the service's own type. The
+// controller carries the references across; it does not judge them.
+func toMediaRefs(media []PostMediaRequest) []service.MediaRef {
+	refs := make([]service.MediaRef, 0, len(media))
+	for _, item := range media {
+		refs = append(refs, service.MediaRef{
+			PublicID: item.PublicID,
+			Width:    item.Width,
+			Height:   item.Height,
+		})
+	}
+	return refs
+}
+
 // CreatePostRequest represents request body for creating a post
 type CreatePostRequest struct {
-	Content string                   `json:"content"`
-	Media   []CreatePostMediaRequest `json:"media"`
+	Content string             `json:"content"`
+	Media   []PostMediaRequest `json:"media"`
 }
 
 // CreatePostHandler handles POST /api/posts
@@ -119,18 +139,7 @@ func (c *PostController) CreatePostHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Translate the wire shape into the service's own type. The controller
-	// carries the references across; it does not judge them.
-	refs := make([]service.MediaRef, 0, len(req.Media))
-	for _, media := range req.Media {
-		refs = append(refs, service.MediaRef{
-			PublicID: media.PublicID,
-			Width:    media.Width,
-			Height:   media.Height,
-		})
-	}
-
-	post, err := c.postService.CreatePost(claims.UserID, req.Content, refs)
+	post, err := c.postService.CreatePost(claims.UserID, req.Content, toMediaRefs(req.Media))
 	if err != nil {
 		writePostError(w, err, "failed to create post")
 		return
@@ -223,9 +232,14 @@ func (c *PostController) UserPostsHandler(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// UpdatePostRequest represents request body for editing a post
+// UpdatePostRequest represents request body for editing a post.
+//
+// Media is a pointer to a slice so the handler can tell three states apart:
+// absent (edit the caption, keep the photos), present but empty (remove every
+// photo), and present with entries (this is the new photo set).
 type UpdatePostRequest struct {
-	Content string `json:"content"`
+	Content string              `json:"content"`
+	Media   *[]PostMediaRequest `json:"media"`
 }
 
 // PostByIDHandler handles GET, PUT and DELETE on /api/posts/{id}
@@ -271,13 +285,30 @@ func (c *PostController) updatePost(w http.ResponseWriter, r *http.Request, post
 		return
 	}
 
+	// Same bound as create: an edit carries the same caption and public IDs
+	r.Body = http.MaxBytesReader(w, r.Body, maxPostBodyBytes)
+
 	var req UpdatePostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body is too large")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	post, err := c.postService.UpdatePost(claims.UserID, postID, req.Content)
+	// nil refs tell the service to keep the photos the post already has. The
+	// service owns that decision because it has the post loaded already, and
+	// because it checks ownership first: resolving the existing photos here
+	// would mean reading a post before knowing the caller may touch it.
+	var refs []service.MediaRef
+	if req.Media != nil {
+		refs = toMediaRefs(*req.Media)
+	}
+
+	post, err := c.postService.UpdatePost(claims.UserID, postID, req.Content, refs)
 	if err != nil {
 		writePostError(w, err, "failed to update post")
 		return

@@ -35,7 +35,7 @@ func (c *CloudinaryPhotoDeleter) DeletePhoto(
 		c.apiSecret,
 	)
 	if err != nil {
-		return fmt.Errorf("intialize Cloudinary: %W", err)
+		return fmt.Errorf("initialize Cloudinary: %w", err)
 	}
 
 	result, err := cld.Upload.Destroy(ctx, uploader.DestroyParams{

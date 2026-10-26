@@ -473,17 +473,50 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 	return posts, nil
 }
 
-// Update changes the content of a post, scoped to its owner
-func (r *PostgresPostRepository) Update(id, userID, content string) error {
-	query := `
-		UPDATE posts
-		SET content = $1, updated_at = $2
-		WHERE id = $3 AND user_id = $4
-	`
-	res, err := r.db.Exec(query, content, time.Now(), strings.TrimSpace(id), strings.TrimSpace(userID))
+// Update rewrites a post's content and replaces its photo rows, scoped to its
+// owner. Content and photos move together in one transaction so an edit can
+// never leave a post with the new caption and the old pictures.
+func (r *PostgresPostRepository) Update(
+	id, userID, content string,
+	media []models.PostMedia,
+) error {
+	trimmedID := strings.TrimSpace(id)
+
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
+	// Rollback after a successful Commit is a no-op, so this is safe to defer
+	// unconditionally and covers every error return below.
+	defer func() { _ = tx.Rollback() }()
+
+	// media_url is the legacy single-image column. Create mirrors the first
+	// photo into it, so an edit has to re-mirror: without this, removing or
+	// reordering photos would leave the column pointing at a picture the post
+	// no longer shows.
+	mediaURL := ""
+	if len(media) > 0 {
+		mediaURL = media[0].URL
+	}
+
+	query := `
+		UPDATE posts
+		SET content = $1, media_url = $2, updated_at = $3
+		WHERE id = $4 AND user_id = $5
+	`
+
+	res, err := tx.Exec(
+		query,
+		content,
+		mediaURL,
+		time.Now(),
+		trimmedID,
+		strings.TrimSpace(userID),
+	)
+	if err != nil {
+		return err
+	}
+
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		return err
@@ -491,7 +524,42 @@ func (r *PostgresPostRepository) Update(id, userID, content string) error {
 	if rowsAffected == 0 {
 		return ErrPostNotFound
 	}
-	return nil
+
+	// Delete-then-insert rather than a row-by-row diff: the client sends the
+	// photo list it wants to end up with, and (post_id, ordinal) is the primary
+	// key, so replacing the set wholesale is both simpler and immune to the
+	// key collisions a reorder would otherwise cause.
+	if _, err := tx.Exec(`DELETE FROM post_media WHERE post_id = $1`, trimmedID); err != nil {
+		return err
+	}
+
+	mediaQuery := `
+		INSERT INTO post_media
+			(post_id, ordinal, url, public_id, media_type, width, height)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+
+	for i := range media {
+		mediaType := strings.TrimSpace(media[i].MediaType)
+		if mediaType == "" {
+			mediaType = "image"
+		}
+
+		if _, err := tx.Exec(
+			mediaQuery,
+			trimmedID,
+			media[i].Ordinal,
+			media[i].URL,
+			media[i].PublicID,
+			mediaType,
+			media[i].Width,
+			media[i].Height,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *PostgresPostRepository) GetMediaByPostID(postID string,)([]models.PostMedia, error){

@@ -6,6 +6,7 @@ import (
 	"backend/utils"
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"time"
 )
@@ -136,8 +137,14 @@ func (s *PostService) GetPost(postID string) (*models.PostResponse, error) {
 	return s.postRepo.GetByID(trimmedPostID)
 }
 
-// UpdatePost rewrites the content of a post the user owns
-func (s *PostService) UpdatePost(userID, postID, content string) (*models.PostResponse, error) {
+// UpdatePost rewrites a post the user owns: its caption, its photos, or both.
+// refs carries the photo list the caller wants the post to end up with. A nil
+// slice means the caller did not mention photos at all and the existing ones
+// are kept; an empty, non-nil slice is an explicit "remove them all".
+func (s *PostService) UpdatePost(
+	userID, postID, content string,
+	refs []MediaRef,
+) (*models.PostResponse, error) {
 	trimmedUserID := strings.TrimSpace(userID)
 	if trimmedUserID == "" {
 		return nil, ErrUnauthorizedPost
@@ -157,22 +164,95 @@ func (s *PostService) UpdatePost(userID, postID, content string) (*models.PostRe
 	if err != nil {
 		return nil, err
 	}
+
 	if existing.UserID != trimmedUserID {
 		return nil, ErrNotPostOwner
 	}
 
-	// Editing remains text-only, but a post carrying photos is allowed to have
-	// no caption. Without this a photo-only post could never be edited at all,
-	// and a photo post's caption could never be cleared.
-	if trimmedContent == "" && len(existing.Media) == 0 {
-		return nil, ErrEmptyContent
+	// Editing only the caption is the common case, so an absent photo list has
+	// to mean "leave them alone". Re-resolving the post's own public IDs rather
+	// than copying its rows keeps a single path into the database: whatever is
+	// written went through the same validation as a brand new photo.
+	if refs == nil {
+		refs = make([]MediaRef, 0, len(existing.Media))
+		for _, item := range existing.Media {
+			refs = append(refs, MediaRef{
+				PublicID: item.PublicID,
+				Width:    item.Width,
+				Height:   item.Height,
+			})
+		}
 	}
 
-	if err := s.postRepo.Update(trimmedPostID, trimmedUserID, trimmedContent); err != nil {
+	media, err := s.media.resolve(trimmedUserID, refs)
+	if err != nil {
 		return nil, err
 	}
 
+	// A post must still carry something after the edit
+	if trimmedContent == "" && len(media) == 0 {
+		return nil, ErrEmptyPost
+	}
+
+	// Captured before the write, because afterwards the old rows are gone
+	dropped := droppedPublicIDs(existing.Media, media)
+
+	if err := s.postRepo.Update(
+		trimmedPostID,
+		trimmedUserID,
+		trimmedContent,
+		media,
+	); err != nil {
+		return nil, err
+	}
+
+	// A photo the user removed is no longer reachable from any page, so the
+	// stored file should go too
+	s.releasePhotos(context.Background(), dropped)
+
 	return s.postRepo.GetByID(trimmedPostID)
+}
+//  Comparing by public ID rather than by position means
+// reordering photos drops nothing.
+func droppedPublicIDs(before, after []models.PostMedia) []string {
+	kept := make(map[string]bool, len(after))
+	for _, item := range after {
+		kept[item.PublicID] = true
+	}
+
+	var dropped []string
+	for _, item := range before {
+		if !kept[item.PublicID] {
+			dropped = append(dropped, item.PublicID)
+		}
+	}
+	return dropped
+}
+
+// releasePhotos destroys stored files that no post references any more.
+//
+// Call it only after the database change has committed: the reference count
+// below reads post_media as it now stands, so a public ID with no rows left is
+// genuinely an orphan, while one another post still uses is left untouched.
+
+// Failures are logged, not returned. By this point the user's edit or deletion
+// has already succeeded, so surfacing an error here would report a failure for
+// work that was done; the real cost of giving up is an unused file left in
+// Cloudinary.
+func (s *PostService) releasePhotos(ctx context.Context, publicIDs []string) {
+	if s.photoDeleter == nil {
+		return
+	}
+
+	for _, publicID := range publicIDs {
+		if strings.TrimSpace(publicID) == "" {
+			continue
+		}
+
+		if err := s.photoDeleter.DeletePhoto(ctx, publicID); err != nil {
+			log.Printf("photo cleanup: deleting %q from Cloudinary: %v", publicID, err)
+		}
+	}
 }
 
 // DeletePost permanently removes a post the user owns
@@ -195,6 +275,8 @@ func (s *PostService) DeletePost(userID, postID string) error {
 		return ErrNotPostOwner
 	}
 
+	// Read the photo list while the rows still exist: deleting the post
+	// cascades post_media away, taking the public IDs with it.
 	media, err := s.postRepo.GetMediaByPostID(trimmedPostID)
 	if err != nil {
 		return err
@@ -204,11 +286,11 @@ func (s *PostService) DeletePost(userID, postID string) error {
 		return err
 	}
 
+	publicIDs := make([]string, 0, len(media))
 	for _, item := range media {
-		if err := s.photoDeleter.DeletePhoto(context.Background(), item.PublicID); err != nil {
-			return err
-		}
+		publicIDs = append(publicIDs, item.PublicID)
 	}
+	s.releasePhotos(context.Background(), publicIDs)
 
 	return nil
 }
