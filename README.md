@@ -19,6 +19,9 @@ XClone/
 │   │   │   └── page.tsx
 │   │   ├── login/                          # User login page
 │   │   │   └── page.tsx
+│   │   ├── post/                           # Single post permalink
+│   │   │   └── [id]/
+│   │   │       └── page.tsx
 │   │   ├── signup/                         # User onboarding and registration
 │   │   │   └── page.tsx
 │   │   ├── favicon.ico                     # Application favicon
@@ -37,6 +40,8 @@ XClone/
 │   │   │   └── EditProfileModal.tsx        # Profile editing modal (Avatar, Banner, Bio)
 │   │   └── ui/                             # Shared atomic components
 │   │       └── UserAvatar.tsx              # Fallback-aware avatar component
+│   ├── lib/                                # Shared frontend logic
+│   │   └── postPhotos.ts                   # Photo limits, upload call & DraftPhoto type
 │   ├── proxy.ts                            # Next.js route protection & auth proxy
 │   ├── eslint.config.mjs                   # ESLint configuration (React 19 rules)
 │   ├── next.config.ts                      # Next.js config with remote image domains
@@ -51,7 +56,7 @@ XClone/
 │   │   └── config.go
 │   ├── controllers/                        # HTTP controllers & request handlers
 │   │   ├── auth_controller.go              # Register, Login, Me, Logout, Profile handlers
-│   │   ├── post_controller.go              # Tweet creation & feed handlers
+│   │   ├── post_controller.go              # Post CRUD & feed handlers
 │   │   ├── upload_controller.go            # Media & Cloudinary image upload handlers
 │   │   └── controller.go                   # Health check & base controllers
 │   ├── database/                           # Database connection & schema setup
@@ -67,8 +72,10 @@ XClone/
 │   │   └── routes.go                       # Route registration & dependency injection
 │   ├── service/                            # Core business logic layer
 │   │   ├── auth_service.go                 # Registration, login, validation & hashing
+│   │   ├── cloudinary_deleter.go           # Destroys stored photos a post no longer references
 │   │   ├── post_media.go                   # Photo validation & public_id ownership checks
-│   │   └── post_service.go                 # Post creation & timeline retrieval logic
+│   │   ├── post_service.go                 # Post CRUD, photo resolution & timeline logic
+│   │   └── post_service_test.go            # Go unit tests for the service layer
 │   ├── utils/                              # Cryptographic & utility helpers
 │   │   ├── auth.go                         # JWT token creation, parsing & validation
 │   │   └── utils.go                        # Utility helpers
@@ -117,14 +124,30 @@ XClone/
 - 🛡️ **Edge Route Protection**:
   - Next.js Proxy middleware automatically redirects unauthenticated users trying to visit `/dashboard` to `/login`.
   - Automatically redirects authenticated users away from `/login` or `/signup` directly to `/dashboard`.
-- ✍️ **Post & Tweet Creation**:
-  - Real-time tweet creation with character counter (280 characters limit).
+- ✍️ **Post Creation & Editing**:
+  - Real-time post creation with character counter (280 characters limit, counted in Unicode code
+    points so an emoji costs one character).
+  - Up to **4 photos per post**, uploaded as you pick them, with per-tile progress and retry.
+    A photo-only post (no caption) is valid.
   - Authenticated post submissions linked to user identity via secure JWT HTTP cookies.
   - Live posting feedback with loading indicators and client-side error handling.
+- 🖊️ **Full Post CRUD with ownership checks**:
+  - Edit a post's caption *and* its photos — add, replace, reorder, or remove them — from the edit
+    modal on the feed, a profile, or the post's own page.
+  - Delete a post; `ON DELETE CASCADE` clears its photo rows.
+  - Every write re-validates ownership server-side: editing or deleting someone else's post is
+    `403`, and photo references are re-resolved through the same validation a new post goes through.
+  - Photos dropped by an edit or removed with a post are destroyed in Cloudinary.
+    ⚠️ **Known limitation:** this path does not count how many posts still reference a photo
+    before destroying it, and `post_media.public_id` is deliberately not unique. If the same
+    asset is attached to two posts, editing or deleting either one breaks the other's image.
+  - Single-post permalink page at `/post/[id]`.
 - 📰 **Chronological Feed & Dynamic Timelines**:
   - Global chronological feed (`/api/posts/feed`) joining post records with author profile data (`name`, `username`, `avatar_url`).
   - User-specific post timeline (`/api/posts/user?username=...`) on profile pages.
-  - Reusable `PostCard` component featuring relative timestamps ("now", "5m", "2h", "3d"), action button counters (replies, retweets, likes), and direct profile navigation.
+  - Reusable `PostCard` component featuring relative timestamps ("now", "5m", "2h", "3d"), an
+    attached-photo grid, action button counters (replies, retweets, likes), and direct profile
+    navigation.
 - 👤 **User Profiles & Customization**:
   - Dynamic user profile routes (`/[username]`).
   - Full profile editing modal supporting custom display names, bios, avatars, and banner images.
@@ -151,7 +174,10 @@ XClone/
 | `GET` | `/api/auth/check-username` | Check availability of a username (`?username=`) | No |
 | `GET` | `/api/auth/me` | Fetch currently authenticated user session via cookie | Yes |
 | `GET` | `/api/users/profile` | Retrieve public user profile (`?username=`) | No |
-| `PUT` / `PATCH` | `/api/users/profile` | Update profile (name, bio, avatar) | Yes |
+| `PUT` | `/api/users/profile` | Update profile (name, bio, avatar) | Yes |
+
+The profile handler also accepts `PATCH`, but `PATCH` is missing from
+`Access-Control-Allow-Methods`, so the browser's preflight blocks it before it is sent. Use `PUT`.
 
 ### Posts & Timelines
 | Method | Endpoint | Description | Auth Required |
@@ -159,6 +185,13 @@ XClone/
 | `POST` | `/api/posts` | Create a post, with up to 4 optional photos | Yes |
 | `GET` | `/api/posts/feed` | Retrieve global chronological timeline feed (`?limit=20&offset=0`) | No |
 | `GET` | `/api/posts/user` | Retrieve posts by a specific username (`?username=&limit=20&offset=0`) | No |
+| `GET` | `/api/posts/{id}` | Retrieve a single post by ID | No |
+| `PUT` | `/api/posts/{id}` | Update a post you own: its caption, its photos, or both | Yes |
+| `DELETE` | `/api/posts/{id}` | Delete a post you own | Yes |
+
+Note that `limit` is **not** clamped: a value above 100 or below 1 silently falls back to the
+default of 20 rather than erroring, so a client cannot distinguish "you asked for too many"
+from "there were only 20".
 
 #### Creating a post with photos
 
@@ -202,6 +235,51 @@ compatibility. `media[]` is authoritative.
 | `public_id` not one of the caller's own uploads | `400` |
 | Request body over 64KB | `413` |
 | Cloudinary not configured (only when photos are attached) | `503` |
+
+#### Editing a post
+
+`PUT /api/posts/{id}` rewrites a post you own. It takes the same body as create, and the `media`
+field is **tri-state** — this is the part worth reading carefully:
+
+| `media` in the request body | Result |
+| :--- | :--- |
+| Field **omitted** (or `null`) | Photos are left exactly as they are; only the caption changes |
+| `[]` (empty array) | **All photos are removed** |
+| `[{ "public_id": ... }, ...]` | The post ends up with precisely these photos, in this order |
+
+```json
+{
+  "content": "updated caption",
+  "media": [
+    { "public_id": "xclone/posts/usr_abc/9f2c4e7a1b3d5f08", "width": 2048, "height": 1365 }
+  ]
+}
+```
+
+- Photos are **re-resolved, not copied**: every `public_id` goes through the same ownership and
+  shape validation as a brand new upload, so an edit cannot smuggle in a reference that a create
+  would have rejected.
+- Reordering is free — the array's order becomes the new `ordinal`, and photos are matched by
+  `public_id`, so moving a photo does not delete and re-upload it.
+- A photo **dropped** by the edit is destroyed in Cloudinary once the database write commits.
+- The post must still carry something afterwards: clearing the text *and* the photos is `400`.
+- Because an omitted `media` key means "keep the photos", a **misspelled** key (`medias`) silently
+  keeps them instead of removing them: the decoder does not reject unknown fields. Spell the key
+  correctly and send `[]` to clear a post's photos.
+
+`DELETE /api/posts/{id}` removes the post and, by cascade, its `post_media` rows, then destroys
+the photos in Cloudinary. It responds `200` with the deleted `id`.
+
+Shared by both:
+
+| Error | Status |
+| :--- | :---: |
+| Missing or invalid auth cookie | `401` |
+| Post does not exist | `404` |
+| Post belongs to another user | `403` |
+| Caption over 280 characters, over 4 photos, or an invalid `public_id` | `400` |
+| Nothing left after the edit (no text and no photos) | `400` |
+| Request body over 64KB | `413` |
 
 ### Media & System
 | Method | Endpoint | Description | Auth Required |
@@ -265,7 +343,7 @@ cp backend/.env.example backend/.env
 | `CLOUDINARY_CLOUD_NAME` | No | All three Cloudinary values are needed for uploads. |
 | `CLOUDINARY_API_KEY` | No | Without them the app still runs, but avatar and photo uploads answer `503` and a warning is logged at boot. |
 | `CLOUDINARY_API_SECRET` | No | |
-| `CLOUDINARY_UPLOAD_FOLDER` | No | Folder prefix for uploaded assets. |
+| `CLOUDINARY_UPLOAD_FOLDER` | No | Folder prefix shared by **both** upload endpoints. Not purely cosmetic: it is baked into the `public_id` that the posts API validates against, so changing it changes which references are accepted. Existing images keep resolving (their full URLs are stored), but a photo uploaded just before a change and posted just after is rejected. |
 
 ### Database (`.env` at the repository root)
 
@@ -360,10 +438,11 @@ The frontend application runs on `http://localhost:3000`.
 Before submitting changes, run the linters and tests:
 
 ```bash
-# Backend: compile and vet
+# Backend: compile, vet, and test
 cd backend
 go build ./...
 go vet ./...
+go test ./...
 
 # Frontend: lint, test, and production build
 cd ../frontend
@@ -375,10 +454,20 @@ npm run build
 Use `npx vitest run` for a one-shot run. `npm test` is bare `vitest`, which starts an
 interactive watch process and never exits — it is not suitable for CI or scripted checks.
 
-**Test coverage is currently partial.** `frontend/components/post/PostCard.test.tsx` is the
-only test file, covering whether a post renders an attached photo or falls back to text-only. The Go backend has no
-automated test suite yet; the repository-layer interfaces in `backend/repository/repository.go`
-exist partly to make that straightforward to add.
+**Test coverage is thin.** There are two test files:
+
+| File | Covers |
+| :--- | :--- |
+| `backend/service/post_service_test.go` | `droppedPublicIDs` — which photos an edit removes |
+| `frontend/components/post/PostCard.test.tsx` | Whether a post renders an attached photo or falls back to text-only |
+
+No controller, repository, or end-to-end test exists for the create/update/delete paths, and the
+Cloudinary release path has no test at all. The repository-layer interfaces in
+`backend/repository/repository.go` exist partly to make that straightforward to add.
+
+`gofmt` is **not** currently clean (`gofmt -l backend/` lists eleven files) and `npm run lint`
+emits one warning (`@next/next/no-img-element`, from the photo grid). Neither is wired into the
+checks above, so both are expected output rather than a regression you introduced.
 
 ---
 
