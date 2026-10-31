@@ -233,7 +233,6 @@ func (c *PostController) UserPostsHandler(w http.ResponseWriter, r *http.Request
 }
 
 // UpdatePostRequest represents request body for editing a post.
-//
 // Media is a pointer to a slice so the handler can tell three states apart:
 // absent (edit the caption, keep the photos), present but empty (remove every
 // photo), and present with entries (this is the new photo set).

@@ -80,6 +80,24 @@ func Migrate(db *sql.DB) error {
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (post_id, ordinal)
 	);
+
+		CREATE TABLE IF NOT EXISTS chat (
+		id VARCHAR(64) PRIMARY KEY,
+		user1_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		user2_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (user1_id, user2_id),
+		CHECK (user1_id < user2_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS message (
+		id VARCHAR(64) PRIMARY KEY,
+		seq BIGSERIAL UNIQUE NOT NULL,
+		chat_id VARCHAR(64) NOT NULL REFERENCES chat(id) ON DELETE CASCADE,
+		sender_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        content TEXT NOT NULL
+	);
 	`
 
 	if _, err := db.Exec(schema); err != nil {

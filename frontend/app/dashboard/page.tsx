@@ -349,6 +349,13 @@ export default function DashboardPage() {
                 <span className="hidden xl:inline">Notifications</span>
               </div>
               <Link
+                href="/messages"
+                className="flex items-center gap-4 p-3 rounded-full hover:bg-[#181818] font-bold text-lg cursor-pointer text-[#eff3f4]"
+              >
+                <span>✉️</span>
+                <span className="hidden xl:inline">Messages</span>
+              </Link>
+              <Link
                 href={`/${user.username}`}
                 className="flex items-center gap-4 p-3 rounded-full hover:bg-[#181818] font-bold text-lg cursor-pointer text-[#eff3f4]"
               >

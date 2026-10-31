@@ -15,6 +15,8 @@ func SetupRouter(
 	cfg *config.Config,
 	userRepo repository.UserRepository,
 	postRepo repository.PostRepository,
+	chatRepo repository.ChatRepository,
+	messageRepo repository.MessageRepository,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -36,6 +38,9 @@ func SetupRouter(
 		photoDeleter,
 	)
 
+	// userRepo is passed in as well: opening a chat starts from a username
+	chatService := service.NewChatService(chatRepo, messageRepo, userRepo)
+
 	// Initialize controllers
 	authController := controllers.NewAuthController(
 		authService,
@@ -50,6 +55,10 @@ func SetupRouter(
 	)
 	postController := controllers.NewPostController(
 		postService,
+		cfg.JWTSecret,
+	)
+	chatController := controllers.NewChatController(
+		chatService,
 		cfg.JWTSecret,
 	)
 
@@ -87,6 +96,11 @@ func SetupRouter(
 	})
 
 	mux.HandleFunc("/api/users/", authController.GetUserProfileHandler)
+
+	// Direct message endpoints. Same shape as /api/posts vs /api/posts/{id}:
+	// Go 1.22+ ServeMux resolves the literal and the wildcard without ambiguity
+	mux.HandleFunc("/api/chats", chatController.ChatsHandler)                   // POST: open or reuse a chat
+	mux.HandleFunc("/api/chats/{id}/messages", chatController.MessagesHandler) // GET history, POST send
 
 	// Apply global middleware chain
 	handler := middleware.CORSMiddleware(mux)

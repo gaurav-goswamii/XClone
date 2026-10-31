@@ -30,6 +30,22 @@ type Post struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type Chat struct {
+	    ID string `json:"id"`
+		User1ID string `json:"user1_id"`
+		User2ID string `json:"user2_id"`
+		CreatedAt time.Time `json:"created_at"`
+}
+
+type Message struct {
+	ID string `json:"id"`
+	ChatID string `json:"chat_id"`
+	SenderID string `json:"sender_id"`
+	Content string `json:"content"`
+	Seq int64 `json:"seq"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // PostMedia represents a single photo attached to a post, in display order
 type PostMedia struct {
 	// Ordinal has no omitempty on purpose: 0 is the first photo, not a missing value

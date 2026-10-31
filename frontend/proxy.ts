@@ -37,7 +37,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protected routes: redirect unauthenticated or expired users to /login
-  if (pathname.startsWith("/dashboard")) {
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/messages")) {
     if (!isValid) {
       const loginUrl = new URL("/login", request.url);
       const response = NextResponse.redirect(loginUrl);
@@ -66,5 +66,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard", "/dashboard/:path*", "/login", "/signup"],
+  matcher: [
+    "/dashboard",
+    "/dashboard/:path*",
+    "/messages",
+    "/messages/:path*",
+    "/login",
+    "/signup",
+  ],
 };

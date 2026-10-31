@@ -1,11 +1,11 @@
 package repository
 
 import (
+	"backend/models"
 	"database/sql"
 	"errors"
 	"strings"
 	"time"
-	"backend/models"
 	"github.com/lib/pq"
 )
 
@@ -613,4 +613,164 @@ func (r *PostgresPostRepository) Delete(id, userID string) error {
 		return ErrPostNotFound
 	}
 	return nil
+}
+
+type PostgresChatRepository struct {
+	db *sql.DB
+}
+
+// NewPostgresChatRepository creates a new PostgresChatRepository/constructor
+func NewPostgresChatRepository(db *sql.DB) *PostgresChatRepository {
+	return &PostgresChatRepository{db: db}
+}
+
+func (r *PostgresChatRepository) Create(chat *models.Chat) error {
+	query := `INSERT INTO chat (id, user1_id, user2_id)
+		VALUES ($1, $2, $3)
+		RETURNING created_at`
+
+	// The caller must already have ordered the pair: the table's
+	// CHECK (user1_id < user2_id) rejects the row otherwise.
+	return r.db.QueryRow(
+		query,
+		chat.ID,
+		chat.User1ID,
+		chat.User2ID,
+	).Scan(&chat.CreatedAt)
+}
+
+func (r *PostgresChatRepository) GetByUsers(
+	user1ID string,
+	user2ID string,
+)(*models.Chat, error){
+
+	user1ID, user2ID =canonicalPair(user1ID, user2ID)
+	 
+	query:=`
+	SELECT id, user1_id, user2_id, created_at
+	FROM chat
+	WHERE user1_id = $1
+	AND user2_id = $2`
+
+	var chat models.Chat
+
+	err := r.db.QueryRow(
+		query,
+		user1ID,
+		user2ID,
+	).Scan(
+		&chat.ID,
+		&chat.User1ID,
+		&chat.User2ID,
+		&chat.CreatedAt,
+	)
+	if err != nil {
+		// "these two have never talked" is a normal answer, not a failure, so
+		// it gets its own sentinel the service can branch on
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrChatNotFound
+		}
+		return nil, err
+	}
+
+	return &chat, nil
+}
+
+func(r* PostgresChatRepository) GetByID(
+	id string,
+)(*models.Chat, error){
+	query:=`
+	SELECT id, user1_id, user2_id, created_at
+        FROM chat
+        WHERE id = $1 `
+
+		var chat models.Chat
+
+		err := r.db.QueryRow(query, id).Scan(
+			&chat.ID,
+			&chat.User1ID,
+			&chat.User2ID,
+			&chat.CreatedAt,
+		)
+
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrChatNotFound
+			}
+			return nil, err
+		}
+		return &chat, nil
+	}
+
+type PostgresMessageRepository struct {
+	db *sql.DB
+}
+
+// NewPostgresMessageRepository creates a new PostgresMessageRepository/constructor
+func NewPostgresMessageRepository(db *sql.DB) *PostgresMessageRepository {
+	return &PostgresMessageRepository{db: db}
+}
+
+func (r *PostgresMessageRepository) Create(message *models.Message) error {
+
+ query:=`INSERT INTO message (id, chat_id, sender_id, content)
+ VALUES($1, $2, $3, $4)
+ RETURNING seq, created_at`
+
+ 	err := r.db.QueryRow(
+    query,
+    message.ID,
+    message.ChatID,
+    message.SenderID,
+    message.Content,
+).Scan(&message.Seq, &message.CreatedAt)
+
+return err
+}
+
+func (r *PostgresMessageRepository) ListByChat(chatID string) ([]models.Message, error) {
+	// seq is selected as well as ordered by: it is the cursor the client will
+	// eventually send back as "what is new since", so it has to reach the client
+	query := `
+	SELECT id, chat_id, sender_id, content, seq, created_at
+        FROM message
+        WHERE chat_id = $1
+        ORDER BY seq ASC`
+
+		rows, err := r.db.Query(query, chatID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		messages := []models.Message{}
+
+		for rows.Next() {
+			var message models.Message
+
+			err := rows.Scan(
+				&message.ID,
+				&message.ChatID,
+				&message.SenderID,
+				&message.Content,
+				&message.Seq,
+				&message.CreatedAt,
+			)
+			if err != nil {
+				return nil, err
+			}
+			messages = append(messages, message)
+		}
+
+		if err:= rows.Err(); err != nil {
+			return nil, err
+		}
+		return messages, nil
+}
+
+func canonicalPair(a, b string) (string, string) {
+    if a < b {
+        return a, b
+    }
+    return b, a
 }
