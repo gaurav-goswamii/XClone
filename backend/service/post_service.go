@@ -28,9 +28,6 @@ var (
 // PostService provides business operations for posts
 type PostService struct {
 	postRepo repository.PostRepository
-	// media validates client-supplied photo references. It lives here because
-	// "where our media is allowed to come from" is a business rule: putting it
-	// in the controller would make the transport layer the security boundary
 	media mediaResolver
 	photoDeleter PhotoDeleter
 }
@@ -99,11 +96,6 @@ func (s *PostService) CreatePost(userID, content string, refs []MediaRef) (*mode
 		Replies:   0,
 		CreatedAt: now,
 		UpdatedAt: now,
-	}
-	// media_url is the legacy single-image column. Mirroring the first photo
-	// into it keeps anything that still reads that field working.
-	if len(media) > 0 {
-		post.MediaURL = media[0].URL
 	}
 
 	if err := s.postRepo.Create(post, media); err != nil {
@@ -230,15 +222,6 @@ func droppedPublicIDs(before, after []models.PostMedia) []string {
 }
 
 // releasePhotos destroys stored files that no post references any more.
-//
-// Call it only after the database change has committed: the reference count
-// below reads post_media as it now stands, so a public ID with no rows left is
-// genuinely an orphan, while one another post still uses is left untouched.
-
-// Failures are logged, not returned. By this point the user's edit or deletion
-// has already succeeded, so surfacing an error here would report a failure for
-// work that was done; the real cost of giving up is an unused file left in
-// Cloudinary.
 func (s *PostService) releasePhotos(ctx context.Context, publicIDs []string) {
 	if s.photoDeleter == nil {
 		return

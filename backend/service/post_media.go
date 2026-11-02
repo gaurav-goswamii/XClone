@@ -10,14 +10,7 @@ import (
 
 const (
 	MaxPostPhotos = 4
-
-	// maxMediaDimension bounds the client-reported pixel sizes. They are only
-	// used to reserve layout space, so an implausible value is clamped rather
-	// than rejected.
 	maxMediaDimension = 20000
-
-	// mediaTokenPattern matches the random suffix the upload endpoint generates
-	// with utils.GenerateRandomToken(8): 8 bytes rendered as 16 hex characters.
 	mediaTokenPattern = "[0-9a-f]{16}"
 )
 
@@ -46,11 +39,7 @@ type mediaResolver struct {
 
 // publicIDPattern builds the only shape of public ID this user is allowed to
 // claim, for example: ^(xclone/)?posts/usr_abc/[0-9a-f]{16}$
-//
-// regexp.QuoteMeta is load-bearing. The user ID is interpolated into the
-// pattern, so without escaping, an ID containing a regex metacharacter would
-// change what the pattern means instead of being matched literally.
-//
+
 // The folder prefix is optional because Cloudinary returns the public ID in
 // two different shapes depending on the account. With classic fixed folders it
 // prepends the folder ("xclone/posts/..."); with dynamic folders the folder is

@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
-
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/cloudinary/cloudinary-go/v2/api"
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
@@ -17,23 +16,12 @@ import (
 
 // Shared limits for every image upload endpoint
 const (
-	// maxImageUploadBytes is the real per-file cap. It is enforced with
-	// http.MaxBytesReader and re-checked against the multipart part header.
 	maxImageUploadBytes = 5 * 1024 * 1024
-
-	// multipartEnvelopeSlack leaves room for the boundaries and part headers
-	// that wrap the file, so a file exactly at the cap is not rejected.
+	// additional bytes for multipart overhead
 	multipartEnvelopeSlack = 1 << 20
-
-	// multipartMemoryBudget is how much of the form is held in memory before
-	// the remainder spills to temporary files. It is NOT a size limit.
+	// upload limit before spilling excess file data into temporary disk storage.
 	multipartMemoryBudget = 1 << 20
-
-	// cloudinaryUploadTimeout bounds a single upload to Cloudinary
 	cloudinaryUploadTimeout = 25 * time.Second
-
-	// postMediaTag makes post photos findable in one Cloudinary Admin API call,
-	// which is what a future cleanup of abandoned uploads needs.
 	postMediaTag = "xclone_post_media"
 )
 

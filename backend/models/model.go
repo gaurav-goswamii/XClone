@@ -22,7 +22,6 @@ type Post struct {
 	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
 	Content   string    `json:"content"`
-	MediaURL  string    `json:"media_url,omitempty"`
 	Likes     int       `json:"likes"`
 	Retweets  int       `json:"retweets"`
 	Replies   int       `json:"replies"`

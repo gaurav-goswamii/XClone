@@ -54,7 +54,6 @@ func Migrate(db *sql.DB) error {
 		id VARCHAR(64) PRIMARY KEY,
 		user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		content TEXT NOT NULL,
-		media_url TEXT DEFAULT '',
 		likes INT DEFAULT 0,
 		retweets INT DEFAULT 0,
 		replies INT DEFAULT 0,

@@ -5,16 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import UserAvatar from "../../components/ui/UserAvatar";
 
-// The `|| ""` matters: without it an unset NEXT_PUBLIC_API_URL makes every
-// request URL start with the literal string "undefined". Every other page in
-// the app already has this fallback.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-
-// How often an open thread re-asks the server. A thread you are staring at
 // should feel near-live; this is the one place to change that if 3s is wrong.
 const POLL_INTERVAL_MS = 3000;
-// Mirrors MaxMessageRunes in backend/service/message.go, so the usual mistake
-// costs no round trip
 const MESSAGE_LIMIT = 2000;
 
 interface CurrentUser {
@@ -210,8 +203,7 @@ export default function MessagesPage() {
     tick();
 
     return () => {
-      // Without this the thread you just left keeps polling forever, and ten
-      // opened chats become ten requests a second writing into the same state
+      // Without this the thread you just left keeps polling forever, and chats become ten requests a second writing into the same state
       cancelled = true;
       clearInterval(intervalID);
     };

@@ -209,14 +209,13 @@ func (r *PostgresPostRepository) Create(post *models.Post, media []models.PostMe
 	defer func() { _ = tx.Rollback() }()
 
 	postQuery := `
-		INSERT INTO posts (id, user_id, content, media_url, likes, retweets, replies, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO posts (id, user_id, content, likes, retweets, replies, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	if _, err := tx.Exec(postQuery,
 		post.ID,
 		post.UserID,
 		post.Content,
-		post.MediaURL,
 		post.Likes,
 		post.Retweets,
 		post.Replies,
@@ -324,7 +323,7 @@ func (r *PostgresPostRepository) attachMedia(posts []*models.PostResponse) error
 func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error) {
 	query := `
 		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
-		       p.content, COALESCE(p.media_url, ''), p.likes, p.retweets, p.replies,
+		       p.content, p.likes, p.retweets, p.replies,
 		       p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
@@ -338,7 +337,6 @@ func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error
 		&post.AuthorUsername,
 		&post.AuthorAvatar,
 		&post.Content,
-		&post.MediaURL,
 		&post.Likes,
 		&post.Retweets,
 		&post.Replies,
@@ -369,7 +367,7 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 
 	query := `
 		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
-		       p.content, COALESCE(p.media_url, ''), p.likes, p.retweets, p.replies,
+		       p.content, p.likes, p.retweets, p.replies,
 		       p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
@@ -392,7 +390,6 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 			&post.AuthorUsername,
 			&post.AuthorAvatar,
 			&post.Content,
-			&post.MediaURL,
 			&post.Likes,
 			&post.Retweets,
 			&post.Replies,
@@ -426,7 +423,7 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 
 	query := `
 		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
-		       p.content, COALESCE(p.media_url, ''), p.likes, p.retweets, p.replies,
+		       p.content, p.likes, p.retweets, p.replies,
 		       p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
@@ -450,7 +447,6 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 			&post.AuthorUsername,
 			&post.AuthorAvatar,
 			&post.Content,
-			&post.MediaURL,
 			&post.Likes,
 			&post.Retweets,
 			&post.Replies,
@@ -490,25 +486,15 @@ func (r *PostgresPostRepository) Update(
 	// unconditionally and covers every error return below.
 	defer func() { _ = tx.Rollback() }()
 
-	// media_url is the legacy single-image column. Create mirrors the first
-	// photo into it, so an edit has to re-mirror: without this, removing or
-	// reordering photos would leave the column pointing at a picture the post
-	// no longer shows.
-	mediaURL := ""
-	if len(media) > 0 {
-		mediaURL = media[0].URL
-	}
-
 	query := `
 		UPDATE posts
-		SET content = $1, media_url = $2, updated_at = $3
-		WHERE id = $4 AND user_id = $5
+		SET content = $1, updated_at = $2
+		WHERE id = $3 AND user_id = $4
 	`
 
 	res, err := tx.Exec(
 		query,
 		content,
-		mediaURL,
 		time.Now(),
 		trimmedID,
 		strings.TrimSpace(userID),
