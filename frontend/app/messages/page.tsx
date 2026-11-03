@@ -173,8 +173,6 @@ export default function MessagesPage() {
       const fetched = await loadMessages(chatID);
       inFlight = false;
 
-      // 4. the answer that lands *after* switching away. Guard 1 cannot catch
-      // this one: the await had already started when the thread changed.
       if (cancelled) return;
 
       setIsLoadingMessages(false);
@@ -214,7 +212,7 @@ export default function MessagesPage() {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
-  // No optimistic bubble on purpose: wait for the server, then append. An
+  // wait for the server, then append. An
   // optimistic one needs a temporary ID, reconciliation against the real
   // seq, and care that the poll does not deliver the same message twice.
   const handleSend = async (event: React.FormEvent) => {

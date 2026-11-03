@@ -129,10 +129,6 @@ func (s *PostService) GetPost(postID string) (*models.PostResponse, error) {
 	return s.postRepo.GetByID(trimmedPostID)
 }
 
-// UpdatePost rewrites a post the user owns: its caption, its photos, or both.
-// refs carries the photo list the caller wants the post to end up with. A nil
-// slice means the caller did not mention photos at all and the existing ones
-// are kept; an empty, non-nil slice is an explicit "remove them all".
 func (s *PostService) UpdatePost(
 	userID, postID, content string,
 	refs []MediaRef,
@@ -161,10 +157,6 @@ func (s *PostService) UpdatePost(
 		return nil, ErrNotPostOwner
 	}
 
-	// Editing only the caption is the common case, so an absent photo list has
-	// to mean "leave them alone". Re-resolving the post's own public IDs rather
-	// than copying its rows keeps a single path into the database: whatever is
-	// written went through the same validation as a brand new photo.
 	if refs == nil {
 		refs = make([]MediaRef, 0, len(existing.Media))
 		for _, item := range existing.Media {

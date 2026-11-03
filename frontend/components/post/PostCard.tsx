@@ -26,7 +26,6 @@ export interface PostResponse {
   author_username: string;
   author_avatar?: string;
   content: string;
-  media_url?: string;
   media?: PostMedia[];
   likes: number;
   retweets: number;

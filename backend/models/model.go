@@ -64,7 +64,6 @@ type PostResponse struct {
 	AuthorUsername string      `json:"author_username"`
 	AuthorAvatar   string      `json:"author_avatar"`
 	Content        string      `json:"content"`
-	MediaURL       string      `json:"media_url,omitempty"`
 	Media          []PostMedia `json:"media"`
 	Likes          int         `json:"likes"`
 	Retweets       int         `json:"retweets"`
