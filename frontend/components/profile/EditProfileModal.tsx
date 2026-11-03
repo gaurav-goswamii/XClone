@@ -44,13 +44,11 @@ export default function EditProfileModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError("Image size cannot exceed 5MB");
       return;
     }
 
-    // Validate type
     const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (!validTypes.includes(file.type)) {
       setError("Please select a JPG, PNG, WEBP, or GIF image");
@@ -60,7 +58,6 @@ export default function EditProfileModal({
     setIsUploading(true);
     setError(null);
 
-    // Immediate local preview
     const previewUrl = URL.createObjectURL(file);
     setAvatarUrl(previewUrl);
 
@@ -131,7 +128,6 @@ export default function EditProfileModal({
         id="edit-profile-modal"
         className="w-full max-w-[600px] bg-black border border-[#2f3336] rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
       >
-        {/* Modal Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#2f3336] sticky top-0 bg-black/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-6">
             <button
@@ -156,9 +152,7 @@ export default function EditProfileModal({
           </button>
         </div>
 
-        {/* Modal Scrollable Body */}
         <div className="overflow-y-auto flex-1 pb-6">
-          {/* Header Banner */}
           <div className="relative h-44 bg-[#333639] flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" />
             <button
@@ -172,7 +166,6 @@ export default function EditProfileModal({
             </button>
           </div>
 
-          {/* Avatar Section (overlapping banner) */}
           <div className="px-4 -mt-16 mb-4 flex justify-between items-end relative z-20">
             <div className="relative group">
               <UserAvatar
@@ -182,7 +175,6 @@ export default function EditProfileModal({
                 className="border-4 border-black ring-2 ring-[#2f3336]/60 shadow-xl"
               />
 
-              {/* Camera Icon Overlay to trigger Cloudinary Upload */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -210,7 +202,6 @@ export default function EditProfileModal({
             </div>
           </div>
 
-          {/* Form Fields */}
           <div className="px-4 space-y-5">
             {error && (
               <div className="p-3 bg-[#f4212e]/10 border border-[#f4212e]/30 rounded-xl text-[#f4212e] text-sm">
@@ -218,7 +209,6 @@ export default function EditProfileModal({
               </div>
             )}
 
-            {/* Display Name Input */}
             <div className="relative border border-[#333639] focus-within:border-[#1d9bf0] focus-within:ring-1 focus-within:ring-[#1d9bf0] rounded-lg p-3 transition">
               <div className="flex justify-between text-xs text-[#71767b]">
                 <label htmlFor="edit-name">Name</label>
@@ -235,7 +225,6 @@ export default function EditProfileModal({
               />
             </div>
 
-            {/* Bio Input */}
             <div className="relative border border-[#333639] focus-within:border-[#1d9bf0] focus-within:ring-1 focus-within:ring-[#1d9bf0] rounded-lg p-3 transition">
               <div className="flex justify-between text-xs text-[#71767b]">
                 <label htmlFor="edit-bio">Bio</label>
@@ -252,7 +241,6 @@ export default function EditProfileModal({
               />
             </div>
 
-            {/* Cloudinary URL input for direct custom URL */}
             <div className="relative border border-[#333639] focus-within:border-[#1d9bf0] focus-within:ring-1 focus-within:ring-[#1d9bf0] rounded-lg p-3 transition">
               <div className="flex justify-between text-xs text-[#71767b]">
                 <label htmlFor="edit-avatar-url">Profile Picture URL (Cloudinary or Direct)</label>

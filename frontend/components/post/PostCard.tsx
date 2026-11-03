@@ -4,11 +4,6 @@ import React, { useState } from "react";
 import Link from "next/link";
 import UserAvatar from "../ui/UserAvatar";
 
-
-//One photo attached to a post. Mirrors models.PostMedia on the backend.
-//ordinal is the display position (0-3) and is assigned by the server, never
-//sent by the client. width/height are optional because the API omits them when
-//the dimensions are unknown.
 export interface PostMedia {
   ordinal: number;
   url: string;
@@ -18,7 +13,6 @@ export interface PostMedia {
   height?: number;
 }
 
-//The post data structure 
 export interface PostResponse {
   id: string;
   user_id: string;
@@ -33,19 +27,16 @@ export interface PostResponse {
   created_at: string;
   updated_at?: string;
 }
-//Used by the parent container to transfer information and functions = props
 interface PostCardProps {
   post: PostResponse;
   isOwner?: boolean;
   onLike?: (postId: string) => void;
   onRetweet?: (postId: string) => void;
   onReply?: (postId: string) => void;
-  //imp for edit/delete func
   onEdit?: (post: PostResponse) => void;
   onDelete?: (postId: string) => void;
 }
 
-//Formats the post creation time into a relative time string (e.g., "5m", "2h", "3d") or a date string if older than a week.
 function formatRelativeTime(dateString: string): string {
   try {
     const postDate = new Date(dateString);
@@ -76,7 +67,6 @@ function formatRelativeTime(dateString: string): string {
   }
 }
 
-//The PostCard component displays a single post with its content, author information, and action buttons. It also handles the display of the edit/delete menu for the post owner.
 export default function PostCard({
   post,
   isOwner = false,
@@ -87,7 +77,6 @@ export default function PostCard({
   onDelete,
 }: PostCardProps) {
   const timeFormatted = formatRelativeTime(post.created_at);
-  // State to manage the visibility of the edit/delete menu/
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const canManage = isOwner && Boolean(onEdit || onDelete);
 
@@ -96,7 +85,6 @@ export default function PostCard({
       id={`post-${post.id}`}
       className="p-4 border-b border-[#2f3336] hover:bg-[#080808]/80 transition duration-150 flex gap-3 select-text"
     >
-      {/* Author Avatar */}
       <Link
         href={`/${post.author_username}`}
         className="shrink-0 group"
@@ -110,9 +98,7 @@ export default function PostCard({
         />
       </Link>
 
-      {/* Post Content & Meta */}
       <div className="flex-1 min-w-0">
-        {/* Author Header */}
         <div className="flex items-start gap-2">
           <div className="flex items-center gap-1.5 text-[15px] leading-5 truncate min-w-0 flex-1">
             <Link
@@ -141,7 +127,6 @@ export default function PostCard({
             )}
           </div>
 
-          {/* Owner-only actions: a sibling of the truncating block, never clipped by it */}
           {canManage && (
             <div className="relative shrink-0">
               <button
@@ -161,7 +146,6 @@ export default function PostCard({
 
               {isMenuOpen && (
                 <>
-                  {/* Catches clicks outside the menu so it closes */}
                   <div
                     className="fixed inset-0 z-30"
                     onClick={() => setIsMenuOpen(false)}
@@ -172,7 +156,6 @@ export default function PostCard({
                     className="absolute right-0 top-9 z-40 w-40 py-1 bg-black border border-[#2f3336] rounded-xl shadow-2xl overflow-hidden"
                   >
                     {onEdit && (
-                      //Edit button
                       <button
                         type="button"
                         role="menuitem"
@@ -205,12 +188,10 @@ export default function PostCard({
           )}
         </div>
 
-        {/* Text-Only Post Body */}
         <p className="mt-1 text-[15px] leading-relaxed text-[#e7e9ea] break-words whitespace-pre-line">
           {post.content} 
         </p>
-        
-        {/* Media Section */}
+
         {post.media && post.media.length > 0 && (
           <div className="mt-3 grid grid-cols-2 gap-2">
             {post.media.map((media)=> (
@@ -223,10 +204,7 @@ export default function PostCard({
             </div>
         )}
 
-
-        {/* Action Buttons Bar */}
         <div className="mt-3 flex items-center justify-between max-w-md text-[#71767b] text-xs">
-          {/* Reply */}
           <button
             type="button"
             onClick={() => onReply?.(post.id)}
@@ -245,7 +223,6 @@ export default function PostCard({
             <span>{post.replies > 0 ? post.replies : ""}</span>
           </button>
 
-          {/* Retweet */}
           <button
             type="button"
             onClick={() => onRetweet?.(post.id)}
@@ -264,7 +241,6 @@ export default function PostCard({
             <span>{post.retweets > 0 ? post.retweets : ""}</span>
           </button>
 
-          {/* Like */}
           <button
             type="button"
             onClick={() => onLike?.(post.id)}
@@ -283,7 +259,6 @@ export default function PostCard({
             <span>{post.likes > 0 ? post.likes : ""}</span>
           </button>
 
-          {/* Share */}
           <button
             type="button"
             className="flex items-center gap-2 group hover:text-[#1d9bf0] transition cursor-pointer p-1 -m-1 rounded-full"

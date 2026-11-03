@@ -25,9 +25,6 @@ interface UserProfile {
   created_at?: string;
 }
 
-// The `|| ""` matters: without it an unset NEXT_PUBLIC_API_URL makes every
-// request URL start with the literal string "undefined". Every other file in
-// the app already has this fallback.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const CHAR_LIMIT = 280;
 
@@ -46,8 +43,6 @@ export default function DashboardPage() {
   const [feedError, setFeedError] = useState<string | null>(null);
   const [draftPhotos, setDraftPhotos] = useState<DraftPhoto[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Object URLs must be revoked by hand or they leak for the page's lifetime.
-  // A ref lets the unmount cleanup see the current list without re-running.
   const previewUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -91,7 +86,6 @@ export default function DashboardPage() {
 
     verifySession();
 
-    // Re-verify session when the window gains focus (e.g., after cookie changes/deletion in DevTools)
     const handleFocus = () => {
       verifySession();
     };
@@ -103,7 +97,6 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  // Fetch live timeline feed
   useEffect(() => {
     let isCancelled = false;
 
@@ -117,7 +110,6 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {
-        // Keep feed empty on error
       })
       .finally(() => {
         if (!isCancelled) {
@@ -131,23 +123,18 @@ export default function DashboardPage() {
   }, []);
 
   const handleLogout = async () => {
-    // Clear backend session cookie
     try {
       await fetch(`${API_BASE}/api/auth/logout`, {
         method: "POST",
         credentials: "include",
       });
     } catch {
-      // Continue client logout even on network error
     }
 
-    // Clear user state and navigate to login
     setUser(null);
     router.replace("/login");
   };
 
-  // Upload one photo and patch its row in place. Rows are addressed by key, so
-  // a removal mid-flight simply means the patch finds nothing to update.
   const uploadDraftPhoto = async (key: string, file: File) => {
     const result = await uploadPostPhoto(file);
 
@@ -170,8 +157,6 @@ export default function DashboardPage() {
 
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);
-    // Always reset the input, even on an early return, so picking the same file
-    // again still fires onChange
     e.target.value = "";
     if (picked.length === 0) return;
 
@@ -208,9 +193,6 @@ export default function DashboardPage() {
       })),
     ]);
 
-    // Sequentially, one request in flight at a time: bounds memory and makes
-    // failures easy to attribute. Display order comes from the array, not from
-    // whichever upload finishes first.
     for (const { key, file } of queued) {
       await uploadDraftPhoto(key, file);
     }
@@ -233,11 +215,8 @@ export default function DashboardPage() {
     );
 
     if (isPosting) return;
-    // Posting mid-upload would silently drop the photos still in flight
     if (draftPhotos.some((photo) => photo.status === "uploading")) return;
-    // A post needs text or photos, but no longer both
     if (!content && readyPhotos.length === 0) return;
-    // Spread counts code points, matching the server's rune count
     if ([...content].length > CHAR_LIMIT) return;
 
     setIsPosting(true);
@@ -276,11 +255,9 @@ export default function DashboardPage() {
     }
   };
 
-  // Replace the edited post in place, keeping its position in the feed
   const handlePostUpdated = (updatedPost: PostResponse) => {
     setFeedPosts((prev) =>
       prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
-    //if the id of updated post = prev post id, then replace it
     );
   };
 
@@ -295,7 +272,6 @@ export default function DashboardPage() {
         credentials: "include",
       });
 
-      // 404 means it is already gone, so drop it from the list either way
       if (res.ok || res.status === 404) {
         setFeedPosts((prev) => prev.filter((post) => post.id !== postId));
         return;
@@ -320,11 +296,9 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-black text-[#e7e9ea] flex justify-center">
       <div className="w-full max-w-[1200px] flex">
-        
-        {/* Left Sidebar */}
+
         <aside className="w-[88px] xl:w-[275px] shrink-0 border-r border-[#2f3336] p-3 flex flex-col justify-between h-screen sticky top-0">
           <div className="space-y-4">
-            {/* Logo */}
             <Link
               href="/"
               className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-[#181818] transition text-[#eff3f4]"
@@ -334,7 +308,6 @@ export default function DashboardPage() {
               </svg>
             </Link>
 
-            {/* Navigation links */}
             <nav className="space-y-1">
               <div className="flex items-center gap-4 p-3 rounded-full hover:bg-[#181818] font-bold text-lg cursor-pointer text-[#eff3f4]">
                 <span>🏠</span>
@@ -365,15 +338,12 @@ export default function DashboardPage() {
             </nav>
           </div>
 
-          {/* Left Sidebar Account Pill */}
           <div className="pt-4">
             <AccountPill user={user} onLogout={handleLogout} />
           </div>
         </aside>
 
-        {/* Center Feed Column */}
         <main className="w-full max-w-[600px] border-r border-[#2f3336] min-h-screen">
-          {/* Header Tabs */}
           <header className="sticky top-0 bg-black/80 backdrop-blur-md border-b border-[#2f3336] z-10">
             <div className="flex items-center justify-between px-4 py-3">
               <h1 className="text-xl font-bold text-[#eff3f4]">Home</h1>
@@ -400,7 +370,6 @@ export default function DashboardPage() {
             </div>
           </header>
 
-          {/* Compose Post Box */}
           <form onSubmit={handlePostTweet} className="p-4 border-b border-[#2f3336] flex gap-3">
             <Link href={`/${user.username}`} className="shrink-0">
               <UserAvatar
@@ -477,7 +446,6 @@ export default function DashboardPage() {
 
               <div className="flex items-center justify-between pt-2 border-t border-[#2f3336]">
                 <div className="flex items-center gap-3 text-[#71767b] text-xs">
-                  {/* The narrow accept list also makes iOS transcode HEIC to JPEG */}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -546,7 +514,6 @@ export default function DashboardPage() {
             </div>
           </form>
 
-          {/* Posts Feed */}
           <div>
             {feedError && (
               <div className="mx-4 mt-3 p-3 bg-[#f4212e]/10 border border-[#f4212e]/30 rounded-xl text-[#f4212e] text-sm">
@@ -578,7 +545,6 @@ export default function DashboardPage() {
           </div>
         </main>
 
-        {/* Right Widget Area */}
         <aside className="w-[350px] shrink-0 p-4 hidden lg:block">
           <div className="bg-[#16181c] rounded-2xl p-4 border border-[#2f3336]">
             <h2 className="text-lg font-extrabold text-[#eff3f4] mb-3">What&apos;s happening</h2>
@@ -599,7 +565,6 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* Edit Post Modal */}
       {editingPost && (
         <EditPostModal
           isOpen={Boolean(editingPost)}

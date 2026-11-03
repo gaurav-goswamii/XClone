@@ -16,28 +16,25 @@ var (
 	emailRegex    = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 )
 
-// SignupRequest represents user registration inputs for the single signup endpoint
 type SignupRequest struct {
 	Name      string `json:"name"`
-	Username  string `json:"username"`
+	Username  string `json:"username"` 
 	Email     string `json:"email"`
 	Password  string `json:"password"`
 	BirthDate string `json:"birth_date"`
 }
 
-// LoginRequest represents inputs for email-based login
+
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// AuthService handles authentication and account onboarding logic
 type AuthService struct {
 	userRepo  repository.UserRepository
 	jwtSecret string
 }
 
-// NewAuthService creates a new AuthService instance
 func NewAuthService(userRepo repository.UserRepository, jwtSecret string) *AuthService {
 	return &AuthService{
 		userRepo:  userRepo,
@@ -45,7 +42,6 @@ func NewAuthService(userRepo repository.UserRepository, jwtSecret string) *AuthS
 	}
 }
 
-// ValidateAge checks if the birthdate satisfies the minimum age of 13 years
 func ValidateAge(birthDateStr string) error {
 	t, err := time.Parse("2006-01-02", birthDateStr)
 	if err != nil {
@@ -53,7 +49,6 @@ func ValidateAge(birthDateStr string) error {
 	}
 
 	now := time.Now()
-	// Calculate age
 	years := now.Year() - t.Year()
 	if now.YearDay() < t.YearDay() {
 		years--
@@ -70,7 +65,6 @@ func ValidateAge(birthDateStr string) error {
 	return nil
 }
 
-// ValidatePassword ensures password is at least 8 characters with letters and numbers
 func ValidatePassword(pass string) error {
 	if len(pass) < 8 {
 		return errors.New("password must be at least 8 characters long")
@@ -92,7 +86,6 @@ func ValidatePassword(pass string) error {
 	return nil
 }
 
-// ValidateUsername checks X handle guidelines (3-15 chars, alphanumeric or underscores)
 func ValidateUsername(username string) error {
 	clean := strings.TrimPrefix(strings.TrimSpace(username), "@")
 	if !usernameRegex.MatchString(clean) {
@@ -101,7 +94,6 @@ func ValidateUsername(username string) error {
 	return nil
 }
 
-// CheckUsernameAvailability checks if the desired username is valid and available
 func (s *AuthService) CheckUsernameAvailability(username string) (bool, string, error) {
 	clean := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(username), "@"))
 	if err := ValidateUsername(clean); err != nil {
@@ -116,7 +108,6 @@ func (s *AuthService) CheckUsernameAvailability(username string) (bool, string, 
 	return true, "Username is available!", nil
 }
 
-// Signup performs validation, checks uniqueness, hashes password, and saves the user
 func (s *AuthService) Signup(req SignupRequest) (*models.User, error) {
 
 	name := strings.TrimSpace(req.Name)
@@ -142,13 +133,11 @@ func (s *AuthService) Signup(req SignupRequest) (*models.User, error) {
 		return nil, err
 	}
 
-	// Check if email already registered
 	existingEmail, _ := s.userRepo.GetByEmail(email)
 	if existingEmail != nil {
 		return nil, errors.New("an account with this email already exists")
 	}
 
-	// Check if username already taken
 	existingUsername, _ := s.userRepo.GetByUsername(username)
 	if existingUsername != nil {
 		return nil, errors.New("username is already taken")
@@ -181,14 +170,11 @@ func (s *AuthService) Signup(req SignupRequest) (*models.User, error) {
 	return user, nil
 }
 
-// GetUserByID fetches user details by ID
 func (s *AuthService) GetUserByID(id string) (*models.User, error) {
 	return s.userRepo.GetByID(id)
 }
 
-// Login authenticates a user using their email and password
 func (s *AuthService) Login(req LoginRequest) (*models.User, string, error) {
-	//lower and clean the input email, checks if empty or invalid format
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	if email == "" || !emailRegex.MatchString(email) {
 		return nil, "", errors.New("please provide a valid email address")
@@ -207,7 +193,6 @@ func (s *AuthService) Login(req LoginRequest) (*models.User, string, error) {
 		return nil, "", errors.New("invalid email or password")
 	}
 
-	// Issue JWT token (valid for 30 days)
 	token, err := utils.GenerateJWT(user.ID, user.Username, s.jwtSecret, 30*24*time.Hour)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to generate access token: %w", err)
@@ -216,7 +201,6 @@ func (s *AuthService) Login(req LoginRequest) (*models.User, string, error) {
 	return user, token, nil
 }
 
-// GetUserByUsername fetches user details by their handle/username
 func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	cleanHandle := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(username), "@"))
 	if cleanHandle == "" {
@@ -225,7 +209,6 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	return s.userRepo.GetByUsername(cleanHandle)
 }
 
-// UpdateUserProfile updates user's display name, avatar URL, and bio
 func (s *AuthService) UpdateUserProfile(userID, name, avatarURL, bio string) (*models.User, error) {
 	trimmedName := strings.TrimSpace(name)
 	if trimmedName == "" {

@@ -3,11 +3,8 @@ import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-libra
 import "@testing-library/jest-dom/vitest";
 import MessagesPage from "./page";
 
-// React only allows act() when it is told it is in a test environment.
-// render() sets this for itself, but the polling tests call act() directly.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// The page redirects when there is no session, so the router has to be faked
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
@@ -40,10 +37,7 @@ function fail(status: number, msg: string) {
   return { ok: false, status, json: async () => ({ status: "error", message: msg }) };
 }
 
-// thread is what GET /messages answers with; a test mutates it to simulate the
-// other person sending something between two polls
 let thread: ReturnType<typeof message>[] = [];
-// openChatResponse lets one test make POST /api/chats fail
 let openChatResponse: unknown = null;
 
 const fetchMock = () => fetch as unknown as ReturnType<typeof vi.fn>;
@@ -53,8 +47,6 @@ beforeEach(() => {
   thread = [];
   openChatResponse = null;
 
-  // jsdom has no layout, so it does not implement scrollIntoView at all. The
-  // page calls it to keep the newest bubble in view.
   Element.prototype.scrollIntoView = vi.fn();
 
   vi.stubGlobal(
@@ -89,17 +81,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// openChatWith walks the username box, which is the only way into a thread.
-// Sync queries only: the fake-timer tests cannot use findBy*, because
-// waitFor's own polling never advances while time is frozen.
 function openChatWith(username: string) {
   const box = screen.getByLabelText("Message someone by username");
   fireEvent.change(box, { target: { value: username } });
   fireEvent.click(screen.getByRole("button", { name: "Open chat" }));
 }
 
-// tick advances fake time and lets React flush whatever the poll set.
-// tick(0) is the "just drain the pending promises" case.
 async function tick(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
@@ -126,7 +113,6 @@ describe("MessagesPage", () => {
     openChatWith("nobody");
 
     expect(await screen.findByText("user not found")).toBeInTheDocument();
-    // No thread was opened, so the composer stays locked
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 
@@ -141,33 +127,27 @@ describe("MessagesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText("hello there")).toBeInTheDocument();
-    // The composer empties, so the same text cannot be sent twice by accident
     await waitFor(() => expect(composer).toHaveValue(""));
   });
 
   it("picks up a reply that arrives between polls, without duplicating what is there", async () => {
-    // Fake timers must be installed before the render: the effect captures
-    // setInterval as it runs, so a real interval scheduled first would keep
-    // ticking on real time and never see advanceTimersByTime.
     vi.useFakeTimers();
     try {
       thread = [message(1, me.id, "first")];
 
       render(<MessagesPage />);
-      await tick(0); // the session fetch resolves
+      await tick(0);
       openChatWith("them");
-      await tick(0); // the chat opens, and the poll fires once immediately
+      await tick(0);
 
       expect(screen.getByText("first")).toBeInTheDocument();
 
-      // The other person answers; the next tick should bring it in
       thread = [...thread, message(2, "usr_them", "second")];
       await tick(3000);
 
       expect(screen.getByText("second")).toBeInTheDocument();
       expect(screen.getAllByText("first")).toHaveLength(1);
 
-      // Several more ticks with nothing new must not duplicate anything
       await tick(9000);
       expect(screen.getAllByText("second")).toHaveLength(1);
       expect(screen.getAllByText("first")).toHaveLength(1);
@@ -187,12 +167,8 @@ describe("MessagesPage", () => {
       const before = fetchMock().mock.calls.length;
       cleanup();
 
-      // The interval itself has to be gone, not merely neutered: the cancelled
-      // flag alone would stop the requests while leaving a timer running for
-      // the lifetime of the tab, once per chat ever opened.
       expect(vi.getTimerCount()).toBe(0);
 
-      // And no request may follow the unmount
       await tick(30000);
       expect(fetchMock().mock.calls.length).toBe(before);
     } finally {

@@ -13,9 +13,6 @@ import {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const CHAR_LIMIT = 280;
 
-// Callers mount this modal only while it is open, which is what resets a
-// cancelled edit: the draft lives in component state, so unmounting discards
-// it and the next opening seeds fresh values from the post again.
 interface EditPostModalProps {
   isOpen: boolean;
   post: PostResponse;
@@ -23,10 +20,6 @@ interface EditPostModalProps {
   onUpdated: (updatedPost: PostResponse) => void;
 }
 
-// initialPhotos seeds the editor with the photos the post already has. They
-// are "done" from the start: they live on the server, so their public IDs can
-// be sent straight back. The public ID doubles as the key because it is unique
-// within a post.
 function initialPhotos(post: PostResponse): DraftPhoto[] {
   return (post.media ?? []).map((media) => ({
     key: media.public_id,
@@ -49,16 +42,12 @@ export default function EditPostModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Mirrors photos so the cleanup paths below can see the current list without
-  // taking it as a dependency and re-running on every edit
   const photosRef = useRef<DraftPhoto[]>([]);
 
   useEffect(() => {
     photosRef.current = photos;
   }, [photos]);
 
-  // Object URLs for newly picked files must be revoked by hand or they leak
-  // for the page's lifetime
   useEffect(() => {
     return () => {
      
@@ -67,7 +56,6 @@ export default function EditPostModal({
 
   if (!isOpen) return null;
 
-  // Spreading counts characters the way Go counts runes, so an emoji costs 1 here too
   const charCount = [...content].length;
   const trimmedContent = content.trim();
 
@@ -76,8 +64,6 @@ export default function EditPostModal({
   );
   const isUploading = photos.some((photo) => photo.status === "uploading");
 
-  // Joining the IDs compares the set *and* its order, so reordering photos
-  // counts as a change the same way adding or removing one does
   const originalPhotoIds = (post.media ?? [])
     .map((media) => media.public_id)
     .join("|");
@@ -87,8 +73,6 @@ export default function EditPostModal({
     trimmedContent === post.content.trim() &&
     currentPhotoIds === originalPhotoIds;
 
-  // A post may be text, photos, or both, but it has to carry something.
-  // Mirrors the same rule in PostService.UpdatePost.
   const canSave =
     (trimmedContent.length > 0 || readyPhotos.length > 0) &&
     charCount <= CHAR_LIMIT &&
@@ -98,8 +82,6 @@ export default function EditPostModal({
 
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);
-    // Always reset the input, even on an early return, so picking the same file
-    // again still fires onChange
     e.target.value = "";
     if (picked.length === 0) return;
 
@@ -136,9 +118,6 @@ export default function EditPostModal({
       })),
     ]);
 
-    // Sequentially, one request in flight at a time: bounds memory and makes
-    // failures easy to attribute. Display order comes from the array, not from
-    // whichever upload finishes first.
     for (const { key, file } of queued) {
       const result = await uploadPostPhoto(file);
       setPhotos((prev) =>
@@ -176,9 +155,6 @@ export default function EditPostModal({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        // media is always sent, so an empty array genuinely means "no photos".
-        // Omitting the field would tell the server to keep the existing ones,
-        // which is the opposite of what removing them all should do.
         body: JSON.stringify({
           content: trimmedContent,
           media: toMediaPayload(photos),
@@ -207,7 +183,6 @@ export default function EditPostModal({
         onSubmit={handleSave}
         className="w-full max-w-[600px] bg-black border border-[#2f3336] rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
       >
-        {/* Modal Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#2f3336]">
           <div className="flex items-center gap-6">
             <button
@@ -231,7 +206,6 @@ export default function EditPostModal({
           </button>
         </div>
 
-        {/* Modal Body */}
         <div className="overflow-y-auto flex-1 px-4 py-4 space-y-4">
           {error && (
             <div className="p-3 bg-[#f4212e]/10 border border-[#f4212e]/30 rounded-xl text-[#f4212e] text-sm">
@@ -307,7 +281,6 @@ export default function EditPostModal({
 
           <div className="flex items-center justify-between border-t border-[#2f3336] pt-3">
             <div className="flex items-center gap-3">
-              {/* The narrow accept list also makes iOS transcode HEIC to JPEG */}
               <input
                 ref={fileInputRef}
                 type="file"

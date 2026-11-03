@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-// MaxPostRunes is the longest a post's text may be, counted in Unicode code
-// points rather than bytes so that emoji cost one character each
 const MaxPostRunes = 280
 
 var (
@@ -21,11 +19,9 @@ var (
 	ErrContentTooLong   = errors.New("post content exceeds 280 characters")
 	ErrUnauthorizedPost = errors.New("unauthorized user")
 	ErrNotPostOwner     = errors.New("you can only modify your own posts")
-	// ErrPostNotFound re-exports the repository sentinel so controllers depend on the service alone
 	ErrPostNotFound = repository.ErrPostNotFound
 )
 
-// PostService provides business operations for posts
 type PostService struct {
 	postRepo repository.PostRepository
 	media mediaResolver
@@ -36,9 +32,6 @@ type PhotoDeleter interface {
 	DeletePhoto(ctx context.Context, publicID string) error
 }
 
-
-
-// NewPostService creates a new instance of PostService
 func NewPostService(postRepo repository.PostRepository, cloudName, uploadFolder string, photoDeleter PhotoDeleter,) *PostService {
 	return &PostService{
 		postRepo: postRepo,
@@ -47,27 +40,20 @@ func NewPostService(postRepo repository.PostRepository, cloudName, uploadFolder 
 	}
 }
 
-// normalizeContent trims post content and applies the length rule. It permits
-// empty text: a post may now consist of photos alone, so whether "empty" is
-// acceptable depends on the photos and is decided by the caller.
 func normalizeContent(content string) (string, error) {
 	trimmedContent := strings.TrimSpace(content)
-	//counting characters(for emojis got to use this setup)
 	if len([]rune(trimmedContent)) > MaxPostRunes {
 		return "", ErrContentTooLong
 	}
 	return trimmedContent, nil
 }
 
-// CreatePost validates and persists a new post with up to MaxPostPhotos photos
 func (s *PostService) CreatePost(userID, content string, refs []MediaRef) (*models.PostResponse, error) {
 	trimmedUserID := strings.TrimSpace(userID)
 	if trimmedUserID == "" {
 		return nil, ErrUnauthorizedPost
 	}
 
-	// Photos are resolved first so that "five photos and no text" reports the
-	// specific photo-count problem rather than the generic empty-post one
 	media, err := s.media.resolve(trimmedUserID, refs)
 	if err != nil {
 		return nil, err
@@ -78,8 +64,6 @@ func (s *PostService) CreatePost(userID, content string, refs []MediaRef) (*mode
 		return nil, err
 	}
 
-	// Text is no longer the only way to have a post, but a post still has to
-	// carry something
 	if trimmedContent == "" && len(media) == 0 {
 		return nil, ErrEmptyPost
 	}
@@ -102,16 +86,13 @@ func (s *PostService) CreatePost(userID, content string, refs []MediaRef) (*mode
 		return nil, err
 	}
 
-	// The re-read is what fills in the author details and the Media slice
 	return s.postRepo.GetByID(postID)
 }
 
-// GetFeed retrieves timeline posts with pagination
 func (s *PostService) GetFeed(limit, offset int) ([]*models.PostResponse, error) {
 	return s.postRepo.ListFeed(limit, offset)
 }
 
-// GetUserPosts retrieves posts for a specific user
 func (s *PostService) GetUserPosts(username string, limit, offset int) ([]*models.PostResponse, error) {
 	cleanUsername := strings.TrimSpace(username)
 	if cleanUsername == "" {
@@ -120,7 +101,6 @@ func (s *PostService) GetUserPosts(username string, limit, offset int) ([]*model
 	return s.postRepo.ListByUser(cleanUsername, limit, offset)
 }
 
-// GetPost retrieves a single post by its ID
 func (s *PostService) GetPost(postID string) (*models.PostResponse, error) {
 	trimmedPostID := strings.TrimSpace(postID)
 	if trimmedPostID == "" {
@@ -173,12 +153,10 @@ func (s *PostService) UpdatePost(
 		return nil, err
 	}
 
-	// A post must still carry something after the edit
 	if trimmedContent == "" && len(media) == 0 {
 		return nil, ErrEmptyPost
 	}
 
-	// Captured before the write, because afterwards the old rows are gone
 	dropped := droppedPublicIDs(existing.Media, media)
 
 	if err := s.postRepo.Update(
@@ -190,14 +168,10 @@ func (s *PostService) UpdatePost(
 		return nil, err
 	}
 
-	// A photo the user removed is no longer reachable from any page, so the
-	// stored file should go too
 	s.releasePhotos(context.Background(), dropped)
 
 	return s.postRepo.GetByID(trimmedPostID)
 }
-//  Comparing by public ID rather than by position means
-// reordering photos drops nothing.
 func droppedPublicIDs(before, after []models.PostMedia) []string {
 	kept := make(map[string]bool, len(after))
 	for _, item := range after {
@@ -213,7 +187,6 @@ func droppedPublicIDs(before, after []models.PostMedia) []string {
 	return dropped
 }
 
-// releasePhotos destroys stored files that no post references any more.
 func (s *PostService) releasePhotos(ctx context.Context, publicIDs []string) {
 	if s.photoDeleter == nil {
 		return
@@ -230,7 +203,6 @@ func (s *PostService) releasePhotos(ctx context.Context, publicIDs []string) {
 	}
 }
 
-// DeletePost permanently removes a post the user owns
 func (s *PostService) DeletePost(userID, postID string) error {
 	trimmedUserID := strings.TrimSpace(userID)
 	if trimmedUserID == "" {
@@ -250,8 +222,6 @@ func (s *PostService) DeletePost(userID, postID string) error {
 		return ErrNotPostOwner
 	}
 
-	// Read the photo list while the rows still exist: deleting the post
-	// cascades post_media away, taking the public IDs with it.
 	media, err := s.postRepo.GetMediaByPostID(trimmedPostID)
 	if err != nil {
 		return err

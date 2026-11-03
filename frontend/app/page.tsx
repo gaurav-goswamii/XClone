@@ -5,9 +5,7 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-black text-[#e7e9ea] flex flex-col justify-between selection:bg-[#1d9bf0]/30 selection:text-white">
-      {/* Main Content Area */}
       <main className="flex-1 flex flex-col lg:flex-row items-center justify-center lg:justify-between px-6 sm:px-12 md:px-24 py-8 max-w-7xl mx-auto w-full">
-        {/* Left Side: Large X Logo */}
         <div className="w-full lg:w-1/2 flex items-center justify-center py-8 lg:py-16">
           <svg
             viewBox="0 0 24 24"
@@ -18,7 +16,6 @@ export default function HomePage() {
           </svg>
         </div>
 
-        {/* Right Side: Headlines & Auth Actions */}
         <div className="w-full lg:w-1/2 flex flex-col items-start lg:pl-12">
           <h1 className="text-[42px] sm:text-[58px] lg:text-[68px] font-extrabold tracking-tight text-[#eff3f4] leading-tight mb-8">
             Happening now
@@ -29,7 +26,6 @@ export default function HomePage() {
           </h2>
 
           <div className="w-full max-w-[320px] flex flex-col gap-3">
-            {/* Create Account Button */}
             <Link
               href="/signup"
               className="w-full h-[44px] rounded-full bg-[#1d9bf0] hover:bg-[#1a8cd8] active:bg-[#177cc0] text-white font-bold text-[15px] flex items-center justify-center transition duration-200 shadow-md"
@@ -59,7 +55,6 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* Footer Nav Links */}
       <footer className="py-4 px-6 text-center text-[12px] text-[#71767b] flex flex-wrap justify-center gap-x-4 gap-y-2 border-t border-[#2f3336]">
         <span className="hover:underline cursor-pointer">About</span>
         <span className="hover:underline cursor-pointer">Download the X app</span>

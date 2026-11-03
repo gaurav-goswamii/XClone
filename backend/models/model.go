@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// User represents a user in the XClone platform
 type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
@@ -17,7 +16,6 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// Post represents a post/tweet in the XClone platform
 type Post struct {
 	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
@@ -45,9 +43,7 @@ type Message struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// PostMedia represents a single photo attached to a post, in display order
 type PostMedia struct {
-	// Ordinal has no omitempty on purpose: 0 is the first photo, not a missing value
 	Ordinal   int    `json:"ordinal"`
 	URL       string `json:"url"`
 	PublicID  string `json:"public_id"`
@@ -56,7 +52,6 @@ type PostMedia struct {
 	Height    int    `json:"height,omitempty"`
 }
 
-// PostResponse represents a post returned with author profile details
 type PostResponse struct {
 	ID             string      `json:"id"`
 	UserID         string      `json:"user_id"`

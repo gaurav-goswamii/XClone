@@ -8,7 +8,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// ConnectPostgres connects to PostgreSQL and verifies the connection
 func ConnectPostgres(databaseURL string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
@@ -30,7 +29,6 @@ func ConnectPostgres(databaseURL string) (*sql.DB, error) {
 	return db, nil
 }
 
-// Migrate executes the initial database schema migrations
 func Migrate(db *sql.DB) error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS users (

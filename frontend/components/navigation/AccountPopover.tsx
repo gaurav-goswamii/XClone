@@ -58,7 +58,6 @@ export default function AccountPopover({
       id="account-popover-menu"
       className="absolute bottom-full left-0 mb-3 w-[280px] xl:w-[300px] bg-black border border-[#2f3336] rounded-2xl shadow-[0_0_15px_rgba(255,255,255,0.18)] py-2 z-50 animate-in fade-in zoom-in-95 duration-100"
     >
-      {/* Active account item -> Links to user's profile */}
       <Link
         href={`/${user.username}`}
         onClick={onClose}
@@ -75,7 +74,6 @@ export default function AccountPopover({
             </p>
           </div>
         </div>
-        {/* Blue Checkmark (active account indicator) */}
         <div className="text-[#1d9bf0] shrink-0 ml-2" title="Active account">
           <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
@@ -85,7 +83,6 @@ export default function AccountPopover({
 
       <div className="h-[1px] bg-[#2f3336] my-1" />
 
-      {/* Profile link item */}
       <Link
         href={`/${user.username}`}
         onClick={onClose}
@@ -94,7 +91,6 @@ export default function AccountPopover({
         View Profile
       </Link>
 
-      {/* Add existing account */}
       <button
         type="button"
         onClick={() => {
@@ -106,7 +102,6 @@ export default function AccountPopover({
         Add an existing account
       </button>
 
-      {/* Logout option */}
       <button
         type="button"
         id="popover-logout-btn"
@@ -119,7 +114,6 @@ export default function AccountPopover({
         Log out @{user.username}
       </button>
 
-      {/* Authentic bottom triangle arrow pointer */}
       <div className="absolute -bottom-2 left-6 xl:left-8 w-4 h-4 bg-black border-r border-b border-[#2f3336] transform rotate-45" />
     </div>
   );

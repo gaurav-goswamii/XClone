@@ -62,7 +62,6 @@ export default function UserAvatar({
           loading="lazy"
         />
       ) : (
-        // Authentic X / Twitter Default Geometric Silhouette SVG
         <svg
           viewBox="0 0 24 24"
           aria-hidden="true"

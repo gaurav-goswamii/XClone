@@ -36,7 +36,6 @@ export function proxy(request: NextRequest) {
   const isValid = isTokenValid(token);
   const { pathname } = request.nextUrl;
 
-  // Protected routes: redirect unauthenticated or expired users to /login
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/messages")) {
     if (!isValid) {
       const loginUrl = new URL("/login", request.url);
@@ -48,13 +47,11 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  // Auth pages: redirect already authenticated users to /dashboard
   if (pathname === "/login" || pathname === "/signup") {
     if (isValid) {
       const dashboardUrl = new URL("/dashboard", request.url);
       return NextResponse.redirect(dashboardUrl);
     }
-    // If token exists but is expired/malformed, clear it so user can cleanly authenticate
     if (token && !isValid) {
       const response = NextResponse.next();
       response.cookies.delete("x_auth_token");

@@ -9,20 +9,17 @@ import (
 	"backend/utils"
 )
 
-// APIResponse represents standard JSON response envelope
 type APIResponse struct {
 	Status  string      `json:"status"`
 	Message string      `json:"message,omitempty"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// AuthController handles incoming authentication HTTP endpoints
 type AuthController struct {
 	authService *service.AuthService
 	jwtSecret   string
 }
 
-// NewAuthController creates an instance of AuthController
 func NewAuthController(authService *service.AuthService, jwtSecret string) *AuthController {
 	return &AuthController{
 		authService: authService,
@@ -50,9 +47,9 @@ func setAuthCookie(w http.ResponseWriter, token string) {
 		Name:     AuthCookieName,
 		Value:    token,
 		Path:     "/",
-		MaxAge:   30 * 24 * 60 * 60, // 30 days
+		MaxAge:   30 * 24 * 60 * 60,
 		HttpOnly: true,
-		Secure:   false, // Set to false for local development over HTTP
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -69,20 +66,16 @@ func clearAuthCookie(w http.ResponseWriter) {
 	})
 }
 
-// SignupHandler handles POST /api/auth/signup
 func (c *AuthController) SignupHandler(w http.ResponseWriter, r *http.Request) {
-	//checks for post method and restricts
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	//checks the json format and validates the data
 	var req service.SignupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	//actual signup function in service
 	user, err := c.authService.Signup(req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -98,7 +91,6 @@ func (c *AuthController) SignupHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// LoginHandler handles POST /api/auth/login
 func (c *AuthController) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -133,7 +125,6 @@ func (c *AuthController) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// LogoutHandler handles POST /api/auth/logout and clears the authentication cookie
 func (c *AuthController) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -148,7 +139,6 @@ func (c *AuthController) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CheckUsernameHandler handles GET /api/auth/check-username?username=xyz
 func (c *AuthController) CheckUsernameHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -174,14 +164,12 @@ func (c *AuthController) CheckUsernameHandler(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// MeHandler handles GET /api/auth/me (validates cookie)
 func (c *AuthController) MeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	// reading the cookie stored in browser
 	cookie, err := r.Cookie(AuthCookieName)
 
 	if err != nil || cookie.Value == "" {
@@ -189,7 +177,6 @@ func (c *AuthController) MeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//checking the cookie using secret and extracting user info into claims
 	claims, err := utils.ValidateJWT(cookie.Value, c.jwtSecret)
 	if err != nil {
 		clearAuthCookie(w)
@@ -212,14 +199,12 @@ func (c *AuthController) MeHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// UpdateProfileRequest represents request body for updating user profile
 type UpdateProfileRequest struct {
 	Name      string `json:"name"`
 	AvatarURL string `json:"avatar_url"`
 	Bio       string `json:"bio"`
 }
 
-// UpdateProfileHandler handles PUT /api/users/profile
 func (c *AuthController) UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPatch {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -269,7 +254,6 @@ func (c *AuthController) UpdateProfileHandler(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// GetUserProfileHandler handles GET /api/users/profile?username=xyz or GET /api/users/{username}
 func (c *AuthController) GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -278,7 +262,6 @@ func (c *AuthController) GetUserProfileHandler(w http.ResponseWriter, r *http.Re
 
 	username := r.URL.Query().Get("username")
 	if strings.TrimSpace(username) == "" {
-		// Try parsing from path suffix: /api/users/{username}
 		path := strings.TrimPrefix(r.URL.Path, "/api/users/")
 		path = strings.Trim(path, "/")
 		if path != "" && path != "profile" {

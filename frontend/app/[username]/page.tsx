@@ -20,24 +20,19 @@ export default function UserProfilePage({ params }: PageProps) {
   const resolvedParams = use(params);
   const targetUsername = decodeURIComponent(resolvedParams.username).replace(/^@/, "");
 
-  // Authenticated user session
   const [currentUser, setCurrentUser] = useState<UserProfileData | null>(null);
-  // Target profile user
   const [profileUser, setProfileUser] = useState<UserProfileData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userNotFound, setUserNotFound] = useState<boolean>(false);
 
-  // Profile posts
   const [userPosts, setUserPosts] = useState<PostResponse[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState<boolean>(true);
 
-  // Profile Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [editingPost, setEditingPost] = useState<PostResponse | null>(null);
   const [postsError, setPostsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("Posts");
 
-  // Fetch current authenticated session
   useEffect(() => {
     const fetchSession = () => {
       fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
@@ -66,7 +61,6 @@ export default function UserProfilePage({ params }: PageProps) {
     };
   }, []);
 
-  // Fetch target profile by dynamic username
   useEffect(() => {
     let isCancelled = false;
 
@@ -102,7 +96,6 @@ export default function UserProfilePage({ params }: PageProps) {
     };
   }, [targetUsername]);
 
-  // Fetch posts created by target user
   useEffect(() => {
     let isCancelled = false;
 
@@ -144,13 +137,11 @@ export default function UserProfilePage({ params }: PageProps) {
         credentials: "include",
       });
     } catch {
-      // Continue
     }
     setCurrentUser(null);
     router.push("/login");
   };
 
-  // Replace the edited post in place, keeping its position in the timeline
   const handlePostUpdated = (updatedPost: PostResponse) => {
     setUserPosts((prev) =>
       prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
@@ -168,7 +159,6 @@ export default function UserProfilePage({ params }: PageProps) {
         credentials: "include",
       });
 
-      // 404 means it is already gone, so drop it from the list either way
       if (res.ok || res.status === 404) {
         setUserPosts((prev) => prev.filter((post) => post.id !== postId));
         return;
@@ -192,10 +182,8 @@ export default function UserProfilePage({ params }: PageProps) {
     <div className="min-h-screen bg-black text-[#e7e9ea] flex justify-center selection:bg-[#1d9bf0]/30 selection:text-white">
       <div className="w-full max-w-[1200px] flex">
 
-        {/* Left Sidebar */}
         <aside className="w-[88px] xl:w-[275px] shrink-0 border-r border-[#2f3336] p-3 flex flex-col justify-between h-screen sticky top-0">
           <div className="space-y-4">
-            {/* Logo */}
             <Link
               href="/dashboard"
               className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-[#181818] transition text-[#eff3f4]"
@@ -205,7 +193,6 @@ export default function UserProfilePage({ params }: PageProps) {
               </svg>
             </Link>
 
-            {/* Navigation links */}
             <nav className="space-y-1">
               <Link
                 href="/dashboard"
@@ -234,7 +221,6 @@ export default function UserProfilePage({ params }: PageProps) {
             </nav>
           </div>
 
-          {/* Left Sidebar Account Pill */}
           <div className="pt-4">
             {currentUser ? (
               <AccountPill user={currentUser} onLogout={handleLogout} />
@@ -249,9 +235,7 @@ export default function UserProfilePage({ params }: PageProps) {
           </div>
         </aside>
 
-        {/* Center Main Profile Column */}
         <main className="w-full max-w-[600px] border-r border-[#2f3336] min-h-screen">
-          {/* Sticky Top Header */}
           <header className="sticky top-0 bg-black/80 backdrop-blur-md border-b border-[#2f3336] z-10 flex items-center gap-6 px-4 py-1.5">
             <button
               type="button"
@@ -283,7 +267,6 @@ export default function UserProfilePage({ params }: PageProps) {
               <div className="w-8 h-8 border-2 border-current border-t-transparent rounded-full animate-spin" />
             </div>
           ) : userNotFound ? (
-            /* Authentic X User Not Found / 404 state */
             <div className="p-8 text-center space-y-4">
               <div className="h-44 bg-[#333639]" />
               <div className="px-4 -mt-16 mb-4 flex justify-between items-end">
@@ -299,12 +282,10 @@ export default function UserProfilePage({ params }: PageProps) {
             </div>
           ) : profileUser ? (
             <div>
-              {/* Cover Banner */}
               <div className="h-48 sm:h-52 bg-[#333639] relative">
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40" />
               </div>
 
-              {/* Avatar & Action Button Row */}
               <div className="px-4 -mt-16 sm:-mt-20 mb-3 flex justify-between items-end relative z-0">
                 <UserAvatar
                   src={profileUser.avatar_url}
@@ -334,7 +315,6 @@ export default function UserProfilePage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* User Bio & Metadata */}
               <div className="px-4 space-y-3">
                 <div>
                   <h2 className="text-xl font-extrabold text-[#eff3f4] flex items-center gap-1.5">
@@ -354,7 +334,6 @@ export default function UserProfilePage({ params }: PageProps) {
                   </p>
                 )}
 
-                {/* Metadata badges */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#71767b]">
                   <div className="flex items-center gap-1">
                     <span>📅</span>
@@ -368,7 +347,6 @@ export default function UserProfilePage({ params }: PageProps) {
                   )}
                 </div>
 
-                {/* Follower metrics */}
                 <div className="flex items-center gap-5 text-sm pt-1">
                   <div className="hover:underline cursor-pointer">
                     <span className="font-bold text-[#eff3f4]">85</span>{" "}
@@ -381,7 +359,6 @@ export default function UserProfilePage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* Profile Sub-tabs */}
               <div className="flex border-b border-[#2f3336] mt-4">
                 {["Posts", "Replies", "Highlights", "Media", "Likes"].map((tab) => (
                   <button
@@ -402,7 +379,6 @@ export default function UserProfilePage({ params }: PageProps) {
                 ))}
               </div>
 
-              {/* Profile Feed Content */}
               <div>
                 {postsError && (
                   <div className="mx-4 mt-3 p-3 bg-[#f4212e]/10 border border-[#f4212e]/30 rounded-xl text-[#f4212e] text-sm">
@@ -444,7 +420,6 @@ export default function UserProfilePage({ params }: PageProps) {
           ) : null}
         </main>
 
-        {/* Right Widget Column */}
         <aside className="w-[350px] shrink-0 p-4 hidden lg:block">
           <div className="bg-[#16181c] rounded-2xl p-4 border border-[#2f3336]">
             <h2 className="text-lg font-extrabold text-[#eff3f4] mb-3">You might like</h2>
@@ -474,7 +449,6 @@ export default function UserProfilePage({ params }: PageProps) {
 
       </div>
 
-      {/* Edit Post Modal */}
       {editingPost && (
         <EditPostModal
           isOpen={Boolean(editingPost)}
@@ -484,7 +458,6 @@ export default function UserProfilePage({ params }: PageProps) {
         />
       )}
 
-      {/* Edit Profile Modal */}
       {isOwnProfile && profileUser && (
         <EditProfileModal
           isOpen={isEditModalOpen}

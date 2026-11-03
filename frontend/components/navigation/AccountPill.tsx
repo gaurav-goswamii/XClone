@@ -46,7 +46,6 @@ export default function AccountPill({ user, onLogout }: AccountPillProps) {
           </div>
         </div>
 
-        {/* Three dots icon (Horizontal Ellipsis) */}
         <div className="hidden xl:flex items-center justify-center text-[#eff3f4] shrink-0 p-1">
           <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current">
             <path d="M3 12c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm9 2c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm7 0c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z" />

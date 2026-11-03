@@ -7,12 +7,10 @@ import (
 	"strings"
 )
 
-// SendMessageRequest represents the request body for sending a message
 type SendMessageRequest struct {
 	Content string `json:"content"`
 }
 
-// MessagesHandler handles GET and POST on /api/chats/{id}/messages
 func (c *ChatController) MessagesHandler(w http.ResponseWriter, r *http.Request) {
 	chatID := strings.TrimSpace(r.PathValue("id"))
 	if chatID == "" {
@@ -30,7 +28,6 @@ func (c *ChatController) MessagesHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// listMessages serves a chat's history to one of its two participants
 func (c *ChatController) listMessages(w http.ResponseWriter, r *http.Request, chatID string) {
 	claims, ok := c.requireAuth(w, r)
 	if !ok {
@@ -51,7 +48,6 @@ func (c *ChatController) listMessages(w http.ResponseWriter, r *http.Request, ch
 	})
 }
 
-// sendMessage appends one message to a chat the caller participates in
 func (c *ChatController) sendMessage(w http.ResponseWriter, r *http.Request, chatID string) {
 	claims, ok := c.requireAuth(w, r)
 	if !ok {

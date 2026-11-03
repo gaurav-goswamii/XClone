@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// GenerateRandomToken generates a cryptographically secure random token of specified byte length
 func GenerateRandomToken(byteLength int) (string, error) {
 	bytes := make([]byte, byteLength)
 	if _, err := rand.Read(bytes); err != nil {
@@ -16,7 +15,6 @@ func GenerateRandomToken(byteLength int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// GeneratePostID returns a prefixed unique ID for a post
 func GeneratePostID() string {
 	token, err := GenerateRandomToken(8)
 	if err != nil {

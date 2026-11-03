@@ -9,12 +9,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 export default function LoginPage() {
   const router = useRouter();
 
-  // Form Fields
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  // UI & Loading States
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -61,9 +59,7 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen w-full bg-black flex items-center justify-center p-0 sm:p-4 text-[#e7e9ea] font-sans antialiased">
-      {/* Modal Container */}
       <div className="w-full sm:max-w-[600px] h-screen sm:h-[650px] bg-black text-[#e7e9ea] sm:rounded-2xl border-0 sm:border border-[#2f3336] flex flex-col relative overflow-hidden shadow-2xl">
-        {/* Top Header */}
         <header className="h-[53px] px-4 flex items-center justify-between border-b border-transparent shrink-0">
           <Link
             href="/"
@@ -75,18 +71,15 @@ export default function LoginPage() {
             </svg>
           </Link>
 
-          {/* Centered X Logo */}
           <div className="flex items-center justify-center">
             <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[22px] w-[22px] fill-[#eff3f4]">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </div>
 
-          {/* Balanced empty spacing */}
           <div className="w-[36px]" />
         </header>
 
-        {/* Content Body */}
         <div className="flex-1 px-6 sm:px-20 pt-4 pb-8 flex flex-col justify-between overflow-y-auto">
           {isSuccess ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center py-12 animate-fade-in">
@@ -106,7 +99,6 @@ export default function LoginPage() {
                   Sign in to X
                 </h1>
 
-                {/* Error Banner */}
                 {error && (
                   <div className="mb-6 p-3 bg-[#f4212e]/10 border border-[#f4212e]/40 rounded-xl text-[#f4212e] text-sm flex items-center gap-2">
                     <svg className="w-4 h-4 shrink-0 fill-current" viewBox="0 0 24 24">
@@ -116,7 +108,6 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                {/* Email Input */}
                 <div
                   className={`relative mb-6 rounded-lg border transition duration-200 px-3 pt-4 pb-2 ${
                     focusedField === "email"
@@ -151,7 +142,6 @@ export default function LoginPage() {
                   />
                 </div>
 
-                {/* Password Input */}
                 <div
                   className={`relative mb-8 rounded-lg border transition duration-200 px-3 pt-4 pb-2 ${
                     focusedField === "password"
@@ -202,7 +192,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Action Buttons & Links */}
               <div className="flex flex-col gap-4 pt-4">
                 <button
                   type="submit"

@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-// Months configuration
 const MONTHS = [
   { name: "January", value: "01" },
   { name: "February", value: "02" },
@@ -24,10 +23,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 export default function SignupPage() {
   const router = useRouter();
 
-  // Multi-step state (1: Info, 2: Password, 3: Username)
   const [step, setStep] = useState<number>(1);
 
-  // Form Fields
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [birthMonth, setBirthMonth] = useState<string>("");
@@ -45,13 +42,11 @@ export default function SignupPage() {
     message: string;
   }>({ checked: false, available: false, message: "" });
 
-  // UI & Loading States
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [signupComplete, setSignupComplete] = useState<boolean>(false);
 
-  // Suggested handles generator (pure deterministic)
   const suggestedHandles = useMemo(() => {
     if (!name.trim()) return [];
     const base = name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10);
@@ -59,7 +54,6 @@ export default function SignupPage() {
     return [`${base}_`, `${base}26`, `the_${base}`];
   }, [name]);
 
-  // Days list based on selected month & year
   const daysInMonth = useMemo(() => {
     if (!birthMonth) return 31;
     const m = parseInt(birthMonth, 10);
@@ -72,7 +66,6 @@ export default function SignupPage() {
     return 31;
   }, [birthMonth, birthYear]);
 
-  // Years list (current year down to 1910)
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const result = [];
@@ -82,7 +75,6 @@ export default function SignupPage() {
     return result;
   }, []);
 
-  // Debounce handle check
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const triggerUsernameCheck = useCallback((handleVal: string) => {
     const clean = handleVal.trim().replace(/^@/, "");
@@ -154,7 +146,6 @@ export default function SignupPage() {
     triggerUsernameCheck(handle);
   };
 
-  // Validation helpers
   const formattedBirthDate = useMemo(() => {
     if (!birthYear || !birthMonth || !birthDay) return "";
     return `${birthYear}-${birthMonth}-${birthDay.padStart(2, "0")}`;
@@ -179,7 +170,6 @@ export default function SignupPage() {
     };
   }, [password]);
 
-  // Navigation handlers
   const handleBack = () => {
     setGeneralError(null);
     if (step > 1) {
@@ -189,7 +179,6 @@ export default function SignupPage() {
     }
   };
 
-  // Step 1: Info submitted -> Go to Password
   const handleStep1Next = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!isStep1Valid) return;
@@ -197,13 +186,11 @@ export default function SignupPage() {
     setStep(2);
   };
 
-  // Step 2: Password submitted -> Go to Username
   const handlePasswordSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!passwordValidation.isValid) return;
     setGeneralError(null);
 
-    // If username is not set, initialize with default suggestion and verify
     if (!username && suggestedHandles.length > 0) {
       setUsername(suggestedHandles[0]);
       triggerUsernameCheck(suggestedHandles[0]);
@@ -212,7 +199,6 @@ export default function SignupPage() {
     setStep(3);
   };
 
-  // Step 3: Single Signup Call (POST /api/auth/signup)
   const handleSignupSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const cleanHandle = username.trim().replace(/^@/, "");
@@ -254,12 +240,9 @@ export default function SignupPage() {
 
   return (
     <main className="min-h-screen w-full bg-black flex items-center justify-center p-0 sm:p-4 text-[#e7e9ea] font-sans antialiased">
-      {/* Modal Container */}
       <div className="w-full sm:max-w-[600px] h-screen sm:h-[650px] bg-black text-[#e7e9ea] sm:rounded-2xl border-0 sm:border border-[#2f3336] flex flex-col relative overflow-hidden shadow-2xl">
-        
-        {/* Top Header */}
+
         <header className="h-[53px] px-4 flex items-center justify-between border-b border-transparent shrink-0">
-          {/* Back or Close button */}
           <button
             type="button"
             onClick={handleBack}
@@ -277,22 +260,18 @@ export default function SignupPage() {
             )}
           </button>
 
-          {/* Centered X Logo */}
           <div className="flex items-center justify-center">
             <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[22px] w-[22px] fill-[#eff3f4]">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </div>
 
-          {/* Step Indicator */}
           <div className="text-[14px] font-medium text-[#71767b] min-w-[70px] text-right">
             Step {step} of 3
           </div>
         </header>
 
-        {/* Content Body */}
         <div className="flex-1 px-6 sm:px-16 pt-2 pb-6 flex flex-col justify-between overflow-y-auto">
-          {/* Success Banner */}
           {signupComplete ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center py-12 animate-fade-in">
               <div className="w-16 h-16 rounded-full bg-[#00ba7c]/20 border border-[#00ba7c] flex items-center justify-center mb-6">
@@ -306,7 +285,6 @@ export default function SignupPage() {
             </div>
           ) : (
             <>
-              {/* STEP 1: Account Information */}
               {step === 1 && (
                 <form onSubmit={handleStep1Next} className="flex-1 flex flex-col justify-between">
                   <div>
@@ -323,7 +301,6 @@ export default function SignupPage() {
                       </div>
                     )}
 
-                    {/* Name Floating Input */}
                     <div
                       className={`relative mb-6 rounded-lg border transition duration-200 px-3 pt-4 pb-2 ${
                         focusedField === "name"
@@ -357,7 +334,6 @@ export default function SignupPage() {
                       </span>
                     </div>
 
-                    {/* Email Floating Input */}
                     <div
                       className={`relative mb-8 rounded-lg border transition duration-200 px-3 pt-4 pb-2 ${
                         focusedField === "email"
@@ -386,7 +362,6 @@ export default function SignupPage() {
                       />
                     </div>
 
-                    {/* Date of Birth Section */}
                     <div>
                       <h2 className="text-[15px] font-bold text-[#eff3f4] mb-1">Date of birth</h2>
                       <p className="text-[14px] text-[#71767b] leading-5 mb-4">
@@ -394,7 +369,6 @@ export default function SignupPage() {
                       </p>
 
                       <div className="flex gap-3">
-                        {/* Month */}
                         <div className="flex-[2] relative border border-[#333639] rounded-lg p-2 hover:border-[#536471] focus-within:border-[#1d9bf0] transition">
                           <label className="text-[11px] text-[#71767b] block">Month</label>
                           <select
@@ -413,7 +387,6 @@ export default function SignupPage() {
                           <span className="absolute right-3 bottom-3 pointer-events-none text-[#71767b] text-xs">▼</span>
                         </div>
 
-                        {/* Day */}
                         <div className="flex-1 relative border border-[#333639] rounded-lg p-2 hover:border-[#536471] focus-within:border-[#1d9bf0] transition">
                           <label className="text-[11px] text-[#71767b] block">Day</label>
                           <select
@@ -432,7 +405,6 @@ export default function SignupPage() {
                           <span className="absolute right-3 bottom-3 pointer-events-none text-[#71767b] text-xs">▼</span>
                         </div>
 
-                        {/* Year */}
                         <div className="flex-1 relative border border-[#333639] rounded-lg p-2 hover:border-[#536471] focus-within:border-[#1d9bf0] transition">
                           <label className="text-[11px] text-[#71767b] block">Year</label>
                           <select
@@ -454,7 +426,6 @@ export default function SignupPage() {
                     </div>
                   </div>
 
-                  {/* Submit Button */}
                   <div className="pt-6">
                     <button
                       type="submit"
@@ -471,7 +442,6 @@ export default function SignupPage() {
                 </form>
               )}
 
-              {/* STEP 2: Password */}
               {step === 2 && (
                 <form onSubmit={handlePasswordSubmit} className="flex-1 flex flex-col justify-between">
                   <div>
@@ -491,7 +461,6 @@ export default function SignupPage() {
                       </div>
                     )}
 
-                    {/* Password Floating Input with Toggle */}
                     <div
                       className={`relative mb-6 rounded-lg border transition duration-200 px-3 pt-4 pb-2 ${
                         focusedField === "password"
@@ -537,7 +506,6 @@ export default function SignupPage() {
                       </button>
                     </div>
 
-                    {/* Requirements Checklist */}
                     <div className="space-y-2 text-[14px]">
                       <div className="flex items-center gap-2">
                         <span className={`text-base ${passwordValidation.minLength ? "text-[#00ba7c]" : "text-[#71767b]"}`}>
@@ -570,7 +538,6 @@ export default function SignupPage() {
                 </form>
               )}
 
-              {/* STEP 3: What Should We Call You? */}
               {step === 3 && (
                 <form onSubmit={handleSignupSubmit} className="flex-1 flex flex-col justify-between">
                   <div>
@@ -590,7 +557,6 @@ export default function SignupPage() {
                       </div>
                     )}
 
-                    {/* Username Input with @ Prefix */}
                     <div
                       className={`relative mb-2 rounded-lg border transition duration-200 px-3 pt-4 pb-2 ${
                         focusedField === "username"
@@ -637,7 +603,6 @@ export default function SignupPage() {
                       </div>
                     </div>
 
-                    {/* Username feedback message */}
                     {usernameStatus.message && (
                       <p
                         className={`text-[13px] mb-4 ${
@@ -648,7 +613,6 @@ export default function SignupPage() {
                       </p>
                     )}
 
-                    {/* Handle suggestions */}
                     {suggestedHandles.length > 0 && (
                       <div className="mt-4">
                         <span className="text-[13px] text-[#71767b] block mb-2">Suggestions:</span>

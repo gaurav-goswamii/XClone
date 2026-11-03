@@ -9,17 +9,14 @@ import (
 	"github.com/lib/pq"
 )
 
-// PostgresUserRepository implements UserRepository using a PostgreSQL database
 type PostgresUserRepository struct {
 	db *sql.DB
 }	
 
-// NewPostgresUserRepository creates a new PostgresUserRepository
 func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
 	return &PostgresUserRepository{db: db}
 }
 
-// GetByID finds a user by their unique ID
 func (r *PostgresUserRepository) GetByID(id string) (*models.User, error) {
 	query := `
 		SELECT id, username, name, email, password_hash, birth_date, avatar_url, bio, is_verified, created_at, updated_at
@@ -49,7 +46,6 @@ func (r *PostgresUserRepository) GetByID(id string) (*models.User, error) {
 	return &user, nil
 }
 
-// GetByEmail finds a user by their email (case-insensitive)
 func (r *PostgresUserRepository) GetByEmail(email string) (*models.User, error) {
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	query := `
@@ -80,7 +76,6 @@ func (r *PostgresUserRepository) GetByEmail(email string) (*models.User, error) 
 	return &user, nil
 }
 
-// GetByUsername finds a user by their username/handle (case-insensitive)
 func (r *PostgresUserRepository) GetByUsername(username string) (*models.User, error) {
 	normalized := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(username), "@"))
 	query := `
@@ -111,7 +106,6 @@ func (r *PostgresUserRepository) GetByUsername(username string) (*models.User, e
 	return &user, nil
 }
 
-// Create inserts a new user record into the PostgreSQL users table
 func (r *PostgresUserRepository) Create(user *models.User) error {
 	emailNorm := strings.ToLower(strings.TrimSpace(user.Email))
 	handleNorm := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(user.Username), "@"))
@@ -143,7 +137,6 @@ func (r *PostgresUserRepository) Create(user *models.User) error {
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) {
-			// 23505 is unique_violation
 			if pqErr.Code == "23505" {
 				return ErrUserAlreadyExists
 			}
@@ -159,7 +152,6 @@ func (r *PostgresUserRepository) Create(user *models.User) error {
 	return nil
 }
 
-// UpdateProfile updates the name, avatar_url, and bio of a user
 func (r *PostgresUserRepository) UpdateProfile(id string, name string, avatarURL string, bio string) error {
 	query := `
 		UPDATE users
@@ -180,18 +172,14 @@ func (r *PostgresUserRepository) UpdateProfile(id string, name string, avatarURL
 	return nil
 }
 
-// PostgresPostRepository implements PostRepository using PostgreSQL
 type PostgresPostRepository struct {
 	db *sql.DB
 }
 
-// NewPostgresPostRepository creates a new PostgresPostRepository/constructor
 func NewPostgresPostRepository(db *sql.DB) *PostgresPostRepository {
 	return &PostgresPostRepository{db: db}
 }
 
-// Create inserts a post and its photos in a single transaction, so a post is
-// never committed without the media that belongs to it
 func (r *PostgresPostRepository) Create(post *models.Post, media []models.PostMedia) error {
 	now := time.Now()
 	if post.CreatedAt.IsZero() {
@@ -203,9 +191,6 @@ func (r *PostgresPostRepository) Create(post *models.Post, media []models.PostMe
 	if err != nil {
 		return err
 	}
-	// Rollback returns sql.ErrTxDone once Commit has succeeded, so this is a
-	// no-op on the happy path and undoes everything on any early return
-	//defer = no error manually again and again.
 	defer func() { _ = tx.Rollback() }()
 
 	postQuery := `
@@ -230,8 +215,6 @@ func (r *PostgresPostRepository) Create(post *models.Post, media []models.PostMe
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 	for i := range media {
-		// The column DEFAULT only applies when the column is omitted from the
-		// INSERT, and we always list it, so an empty value must be filled here
 		mediaType := strings.TrimSpace(media[i].MediaType)
 		if mediaType == "" {
 			mediaType = "image"
@@ -248,12 +231,9 @@ func (r *PostgresPostRepository) Create(post *models.Post, media []models.PostMe
 			return err
 		}
 	}
-// it makes all transactions permanent.
 	return tx.Commit()
 }
 
-// mediaByPost loads the photos for many posts in one query, grouped by post ID.
-// This is what keeps a feed read at two round trips instead of one per post.
 func (r *PostgresPostRepository) mediaByPost(postIDs []string) (map[string][]models.PostMedia, error) {
 	grouped := make(map[string][]models.PostMedia, len(postIDs))
 	if len(postIDs) == 0 {
@@ -291,9 +271,6 @@ func (r *PostgresPostRepository) mediaByPost(postIDs []string) (map[string][]mod
 	return grouped, rows.Err()
 }
 
-// attachMedia fills in the Media field of every post with one batched query.
-// Posts without photos get an empty slice, never nil, so the JSON is [] and
-// never null.
 func (r *PostgresPostRepository) attachMedia(posts []*models.PostResponse) error {
 	if len(posts) == 0 {
 		return nil
@@ -319,7 +296,6 @@ func (r *PostgresPostRepository) attachMedia(posts []*models.PostResponse) error
 	return nil
 }
 
-// GetByID retrieves a post by ID including author profile details
 func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error) {
 	query := `
 		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
@@ -356,7 +332,6 @@ func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error
 	return &post, nil
 }
 
-// ListFeed retrieves the most recent posts joined with author user data
 func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResponse, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -403,7 +378,6 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// Release the connection before the media query instead of holding two
 	rows.Close()
 
 	if err := r.attachMedia(posts); err != nil {
@@ -412,7 +386,6 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 	return posts, nil
 }
 
-// ListByUser retrieves posts created by a specific user (identified by username)
 func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) ([]*models.PostResponse, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -460,7 +433,6 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// Release the connection before the media query instead of holding two
 	rows.Close()
 
 	if err := r.attachMedia(posts); err != nil {
@@ -469,9 +441,6 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 	return posts, nil
 }
 
-// Update rewrites a post's content and replaces its photo rows, scoped to its
-// owner. Content and photos move together in one transaction so an edit can
-// never leave a post with the new caption and the old pictures.
 func (r *PostgresPostRepository) Update(
 	id, userID, content string,
 	media []models.PostMedia,
@@ -482,8 +451,6 @@ func (r *PostgresPostRepository) Update(
 	if err != nil {
 		return err
 	}
-	// Rollback after a successful Commit is a no-op, so this is safe to defer
-	// unconditionally and covers every error return below.
 	defer func() { _ = tx.Rollback() }()
 
 	query := `
@@ -511,10 +478,6 @@ func (r *PostgresPostRepository) Update(
 		return ErrPostNotFound
 	}
 
-	// Delete-then-insert rather than a row-by-row diff: the client sends the
-	// photo list it wants to end up with, and (post_id, ordinal) is the primary
-	// key, so replacing the set wholesale is both simpler and immune to the
-	// key collisions a reorder would otherwise cause.
 	if _, err := tx.Exec(`DELETE FROM post_media WHERE post_id = $1`, trimmedID); err != nil {
 		return err
 	}
@@ -581,7 +544,6 @@ func (r *PostgresPostRepository) GetMediaByPostID(postID string,)([]models.PostM
 	 return media, nil
 }
 
-// Delete permanently removes a post, scoped to its owner
 func (r *PostgresPostRepository) Delete(id, userID string) error {
 	query := `
 		DELETE FROM posts
@@ -605,7 +567,6 @@ type PostgresChatRepository struct {
 	db *sql.DB
 }
 
-// NewPostgresChatRepository creates a new PostgresChatRepository/constructor
 func NewPostgresChatRepository(db *sql.DB) *PostgresChatRepository {
 	return &PostgresChatRepository{db: db}
 }
@@ -615,8 +576,6 @@ func (r *PostgresChatRepository) Create(chat *models.Chat) error {
 		VALUES ($1, $2, $3)
 		RETURNING created_at`
 
-	// The caller must already have ordered the pair: the table's
-	// CHECK (user1_id < user2_id) rejects the row otherwise.
 	return r.db.QueryRow(
 		query,
 		chat.ID,
@@ -651,8 +610,6 @@ func (r *PostgresChatRepository) GetByUsers(
 		&chat.CreatedAt,
 	)
 	if err != nil {
-		// "these two have never talked" is a normal answer, not a failure, so
-		// it gets its own sentinel the service can branch on
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrChatNotFound
 		}
@@ -692,7 +649,6 @@ type PostgresMessageRepository struct {
 	db *sql.DB
 }
 
-// NewPostgresMessageRepository creates a new PostgresMessageRepository/constructor
 func NewPostgresMessageRepository(db *sql.DB) *PostgresMessageRepository {
 	return &PostgresMessageRepository{db: db}
 }
@@ -715,8 +671,6 @@ return err
 }
 
 func (r *PostgresMessageRepository) ListByChat(chatID string) ([]models.Message, error) {
-	// seq is selected as well as ordered by: it is the cursor the client will
-	// eventually send back as "what is new since", so it has to reach the client
 	query := `
 	SELECT id, chat_id, sender_id, content, seq, created_at
         FROM message

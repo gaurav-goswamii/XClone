@@ -29,7 +29,6 @@ export default function PostDetailPage({ params }: PageProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
 
-  // Who is viewing? Only needed to decide whether to offer Edit/Delete
   useEffect(() => {
     let isCancelled = false;
 
@@ -41,7 +40,6 @@ export default function PostDetailPage({ params }: PageProps) {
         }
       })
       .catch(() => {
-        // Viewing while logged out is fine: the post itself is public
       });
 
     return () => {
@@ -49,7 +47,6 @@ export default function PostDetailPage({ params }: PageProps) {
     };
   }, []);
 
-  // The post itself, from the public single-post endpoint
   useEffect(() => {
     let isCancelled = false;
 
@@ -91,7 +88,6 @@ export default function PostDetailPage({ params }: PageProps) {
         credentials: "include",
       });
 
-      // Gone is gone, whether we deleted it now or it had already been removed
       if (res.ok || res.status === 404) {
         router.push("/dashboard");
         return;
@@ -112,7 +108,6 @@ export default function PostDetailPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-black text-[#e7e9ea] flex justify-center selection:bg-[#1d9bf0]/30 selection:text-white">
       <main className="w-full max-w-[600px] border-x border-[#2f3336] min-h-screen">
-        {/* Sticky Header */}
         <div className="sticky top-0 z-20 flex items-center gap-6 px-4 py-3 bg-black/80 backdrop-blur-md border-b border-[#2f3336]">
           <button
             type="button"
@@ -159,7 +154,6 @@ export default function PostDetailPage({ params }: PageProps) {
               onDelete={handleDelete}
             />
 
-            {/* Exact timestamps, which the compact card view omits */}
             <div className="px-4 py-3 text-xs text-[#71767b] border-b border-[#2f3336] space-y-1">
               <p>Posted {new Date(post.created_at).toLocaleString()}</p>
               {wasEdited && post.updated_at && (
@@ -170,7 +164,6 @@ export default function PostDetailPage({ params }: PageProps) {
         )}
       </main>
 
-      {/* Edit Post Modal */}
       {post && isEditOpen && (
         <EditPostModal
           isOpen={isEditOpen}

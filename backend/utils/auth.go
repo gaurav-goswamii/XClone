@@ -8,14 +8,12 @@ import (
 	"time"
 )
 
-// JWTClaims represents standard XClone auth claims
 type JWTClaims struct {
 	UserID   string `json:"sub"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
-// HashPassword hashes a raw password using bcrypt
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -24,13 +22,11 @@ func HashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-// CheckPasswordHash verifies a raw password against a bcrypt hash
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-// GenerateJWT creates a signed JWT token containing user identifiers
 func GenerateJWT(userID, username, secret string, duration time.Duration) (string, error) {
 	claims := JWTClaims{
 		UserID:   userID,
@@ -46,7 +42,6 @@ func GenerateJWT(userID, username, secret string, duration time.Duration) (strin
 	return token.SignedString([]byte(secret))
 }
 
-// ValidateJWT validates an incoming JWT token string and returns the claims
 func ValidateJWT(tokenStr, secret string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -66,7 +61,6 @@ func ValidateJWT(tokenStr, secret string) (*JWTClaims, error) {
 	return nil, errors.New("invalid token")
 }
 
-// GenerateUserID returns a prefixed random unique ID for a user
 func GenerateUserID() string {
 	token, err := GenerateRandomToken(6)
 	if err != nil {

@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// CORSMiddleware sets CORS headers for incoming requests with credentials support
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -28,7 +27,6 @@ func CORSMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// LoggerMiddleware logs details of each incoming HTTP request
 func LoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

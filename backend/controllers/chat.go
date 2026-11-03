@@ -9,17 +9,13 @@ import (
 	"backend/utils"
 )
 
-// maxChatBodyBytes caps a chat request body. A text message needs far less
-// than a post with photo references, so this is already generous.
 const maxChatBodyBytes = 16 << 10
 
-// ChatController handles the direct-message HTTP endpoints
 type ChatController struct {
 	chatService *service.ChatService
 	jwtSecret   string
 }
 
-// NewChatController creates an instance of ChatController
 func NewChatController(chatService *service.ChatService, jwtSecret string) *ChatController {
 	return &ChatController{
 		chatService: chatService,
@@ -27,8 +23,6 @@ func NewChatController(chatService *service.ChatService, jwtSecret string) *Chat
 	}
 }
 
-// requireAuth validates the auth cookie and returns the caller's JWT claims.
-// It writes the failure response itself, so callers only need to check ok.
 func (c *ChatController) requireAuth(w http.ResponseWriter, r *http.Request) (*utils.JWTClaims, bool) {
 	cookie, err := r.Cookie(AuthCookieName)
 	if err != nil || cookie.Value == "" {
@@ -46,13 +40,10 @@ func (c *ChatController) requireAuth(w http.ResponseWriter, r *http.Request) (*u
 	return claims, true
 }
 
-// StartChatRequest represents the request body for opening a chat. The client
-// knows the other person by handle, never by internal ID.
 type StartChatRequest struct {
 	Username string `json:"username"`
 }
 
-// ChatsHandler handles POST /api/chats
 func (c *ChatController) ChatsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -77,7 +68,6 @@ func (c *ChatController) ChatsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handles are stored lowercase and people type them however they like
 	username := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(req.Username, "@")))
 	if username == "" {
 		writeError(w, http.StatusBadRequest, "username is required")
@@ -98,9 +88,6 @@ func (c *ChatController) ChatsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// writeChatError maps chat service errors onto HTTP status codes. It copies
-// post_controller.go's switch rather than auth_controller.go's err.Error()
-// pass-through, so no internal string ever reaches a client.
 func writeChatError(w http.ResponseWriter, err error, fallback string) {
 	switch {
 	case errors.Is(err, service.ErrChatNotFound):
@@ -118,8 +105,6 @@ func writeChatError(w http.ResponseWriter, err error, fallback string) {
 	case errors.Is(err, service.ErrInvalidEncoding):
 		writeError(w, http.StatusBadRequest, "message contains invalid characters")
 	case errors.Is(err, service.ErrUnauthorized):
-		// 403, not 401: the caller is authenticated, they are simply not in
-		// this chat. A 401 would make the browser think the session expired.
 		writeError(w, http.StatusForbidden, "you are not a participant in this chat")
 	default:
 		writeError(w, http.StatusInternalServerError, fallback)

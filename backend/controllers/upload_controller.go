@@ -14,23 +14,16 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 )
 
-// Shared limits for every image upload endpoint
 const (
 	maxImageUploadBytes = 5 * 1024 * 1024
-	// additional bytes for multipart overhead
 	multipartEnvelopeSlack = 1 << 20
-	// upload limit before spilling excess file data into temporary disk storage.
 	multipartMemoryBudget = 1 << 20
 	cloudinaryUploadTimeout = 25 * time.Second
 	postMediaTag = "xclone_post_media"
 )
 
-// errCloudinaryInit separates "we could not build a client" (our own
-// misconfiguration) from "the upload failed" (an upstream problem).
 var errCloudinaryInit = errors.New("cloudinary init error")
 
-// allowedImageTypes lists the types accepted by every image upload. The value
-// compared against it is sniffed from the file, never taken from the client.
 var allowedImageTypes = map[string]bool{
 	"image/jpeg": true,
 	"image/png":  true,
@@ -38,7 +31,6 @@ var allowedImageTypes = map[string]bool{
 	"image/gif":  true,
 }
 
-// a structure to upload image
 type UploadController struct {
 	cloudName    string
 	apiKey       string
@@ -47,7 +39,6 @@ type UploadController struct {
 	jwtSecret    string
 }
 
-// NewUploadController creates a new instance of UploadController/ a consutructor function
 func NewUploadController(cloudName, apiKey, apiSecret, uploadFolder, jwtSecret string) *UploadController {
 	return &UploadController{
 		cloudName:    cloudName,
@@ -58,8 +49,6 @@ func NewUploadController(cloudName, apiKey, apiSecret, uploadFolder, jwtSecret s
 	}
 }
 
-// requireAuth reads the auth cookie and validates the JWT. It writes the error
-// response itself, so callers only need to check the bool.
 func (c *UploadController) requireAuth(w http.ResponseWriter, r *http.Request) (*utils.JWTClaims, bool) {
 	cookie, err := r.Cookie(AuthCookieName)
 	if err != nil || cookie.Value == "" {
@@ -75,7 +64,6 @@ func (c *UploadController) requireAuth(w http.ResponseWriter, r *http.Request) (
 	return claims, true
 }
 
-// requireCloudinary reports whether Cloudinary credentials are configured
 func (c *UploadController) requireCloudinary(w http.ResponseWriter) bool {
 	if c.cloudName == "" || c.apiKey == "" || c.apiSecret == "" {
 		writeError(w, http.StatusServiceUnavailable, "Cloudinary credentials are not configured")
@@ -84,19 +72,9 @@ func (c *UploadController) requireCloudinary(w http.ResponseWriter) bool {
 	return true
 }
 
-// enforceUploadLimit caps the request body before any of it is buffered, then
-// parses the multipart form. It writes the error response itself.
-//
-// The order matters. ParseMultipartForm's argument is only an in-memory budget:
-// anything larger spills to temporary files on disk and the call still
-// succeeds, so it can never be a size limit on its own. http.MaxBytesReader is
-// the actual cap, and it has to wrap the body before parsing begins.
 func enforceUploadLimit(w http.ResponseWriter, r *http.Request, what string) bool {
 	tooLarge := fmt.Sprintf("%s must be %dMB or smaller", what, maxImageUploadBytes/(1024*1024))
 
-	// A declared length above the cap can be refused without reading anything.
-	// Content-Length is client-supplied and is -1 for chunked bodies, so this
-	// is an optimisation and never the guard itself.
 	if r.ContentLength > maxImageUploadBytes+multipartEnvelopeSlack {
 		writeError(w, http.StatusRequestEntityTooLarge, tooLarge)
 		return false
@@ -116,18 +94,12 @@ func enforceUploadLimit(w http.ResponseWriter, r *http.Request, what string) boo
 	return true
 }
 
-// removeMultipartTempFiles deletes any parts that spilled to disk instead of
-// leaving them for the runtime to collect at some later point
 func removeMultipartTempFiles(r *http.Request) {
 	if r.MultipartForm != nil {
 		_ = r.MultipartForm.RemoveAll()
 	}
 }
 
-// openImageUpload pulls the named file out of an already-parsed multipart form,
-// enforces the size cap on the part itself, and verifies the image type by
-// sniffing the content. The returned file is rewound to its first byte and the
-// caller is responsible for closing it.
 func openImageUpload(w http.ResponseWriter, r *http.Request, field, what string) (multipart.File, *multipart.FileHeader, bool) {
 	file, header, err := r.FormFile(field)
 	if err != nil {
@@ -135,8 +107,6 @@ func openImageUpload(w http.ResponseWriter, r *http.Request, field, what string)
 		return nil, nil, false
 	}
 
-	// The envelope slack above deliberately allows a little more than the cap,
-	// so the part's own declared size is checked as well.
 	if header.Size > maxImageUploadBytes {
 		_ = file.Close()
 		writeError(w, http.StatusRequestEntityTooLarge,
@@ -144,8 +114,6 @@ func openImageUpload(w http.ResponseWriter, r *http.Request, field, what string)
 		return nil, nil, false
 	}
 
-	// Identify the type from the first bytes of the file. The client-supplied
-	// Content-Type is ignored, so a text file renamed .jpg is still rejected.
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
 	if err != nil && err != io.EOF {
@@ -160,7 +128,6 @@ func openImageUpload(w http.ResponseWriter, r *http.Request, field, what string)
 		return nil, nil, false
 	}
 
-	// Rewind so the whole file can be streamed to Cloudinary
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		_ = file.Close()
 		writeError(w, http.StatusInternalServerError, "failed to reset uploaded file")
@@ -169,9 +136,6 @@ func openImageUpload(w http.ResponseWriter, r *http.Request, field, what string)
 	return file, header, true
 }
 
-// uploadImage streams an image to Cloudinary. The folder always comes from
-// config; everything else is the caller's choice, so the two endpoints keep
-// their own public IDs and transformations.
 func (c *UploadController) uploadImage(ctx context.Context, src io.Reader, params uploader.UploadParams) (*uploader.UploadResult, error) {
 	cld, err := cloudinary.NewFromParams(c.cloudName, c.apiKey, c.apiSecret)
 	if err != nil {
@@ -179,17 +143,11 @@ func (c *UploadController) uploadImage(ctx context.Context, src io.Reader, param
 	}
 
 	params.Folder = c.uploadFolder
-	// src is an io.Reader, so the file is streamed straight through instead of
-	// being read into memory first
 	result, err := cld.Upload.Upload(ctx, src, params)
 	if err != nil {
 		return nil, err
 	}
 
-	// The SDK reports an API-level rejection in the response body rather than
-	// as a returned error, so a nil error is not enough to conclude success.
-	// Without these two checks a refused upload looks like a 200 carrying an
-	// empty URL, and the caller stores "" as the image.
 	if result.Error.Message != "" {
 		return nil, fmt.Errorf("cloudinary rejected the upload: %s", result.Error.Message)
 	}
@@ -228,7 +186,6 @@ func (c *UploadController) deleteImage(
 	return nil
 }
 
-// writeUploadError maps an upload failure onto a status code
 func writeUploadError(w http.ResponseWriter, err error) {
 	if errors.Is(err, errCloudinaryInit) {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -237,9 +194,7 @@ func writeUploadError(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusBadGateway, fmt.Sprintf("cloudinary upload error: %v", err))
 }
 
-// UploadAvatarHandler handles POST /api/upload/avatar
 func (c *UploadController) UploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
-	//Only post req allowed
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -269,7 +224,6 @@ func (c *UploadController) UploadAvatarHandler(w http.ResponseWriter, r *http.Re
 	defer cancel()
 
 	uploadResult, err := c.uploadImage(ctx, file, uploader.UploadParams{
-		//create a unique filename for cloudinary public id
 		PublicID:       fmt.Sprintf("avatar_%s_%d", claims.UserID, time.Now().Unix()),
 		Overwrite:      boolPtr(true),
 		Transformation: "c_thumb,g_face,w_400,h_400/f_auto,q_auto",
@@ -290,7 +244,6 @@ func (c *UploadController) UploadAvatarHandler(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// UploadPostMediaHandler handles POST /api/upload/post-media
 func (c *UploadController) UploadPostMediaHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -317,9 +270,6 @@ func (c *UploadController) UploadPostMediaHandler(w http.ResponseWriter, r *http
 	}
 	defer file.Close()
 
-	// A random suffix rather than a timestamp: four photos picked at once share
-	// the same second, and the avatar scheme would make them overwrite each
-	// other instead of becoming four separate assets.
 	token, err := utils.GenerateRandomToken(8)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate a photo identifier")
@@ -330,14 +280,9 @@ func (c *UploadController) UploadPostMediaHandler(w http.ResponseWriter, r *http
 	defer cancel()
 
 	uploadResult, err := c.uploadImage(ctx, file, uploader.UploadParams{
-		// The uploader's ID is part of the public ID, which is how the create
-		// endpoint later verifies that the caller uploaded this photo itself.
 		PublicID:  fmt.Sprintf("posts/%s/%s", claims.UserID, token),
 		Overwrite: boolPtr(false),
-		// c_limit only scales down, and only when the image is larger than the
-		// box, so the aspect ratio of a landscape or portrait photo survives.
 		Transformation: "c_limit,w_2048,h_2048/f_auto,q_auto",
-		// A second line of defence behind the content sniffer
 		AllowedFormats: api.CldAPIArray{"jpg", "jpeg", "png", "webp", "gif"},
 		Tags:           api.CldAPIArray{postMediaTag},
 	})
@@ -350,9 +295,6 @@ func (c *UploadController) UploadPostMediaHandler(w http.ResponseWriter, r *http
 		Status:  "success",
 		Message: "Photo uploaded successfully",
 		Data: map[string]interface{}{
-			// public_id is the only field POST /api/posts accepts. url is here
-			// for debugging and verification; the composer previews the local
-			// file instead.
 			"public_id": uploadResult.PublicID,
 			"width":     uploadResult.Width,
 			"height":    uploadResult.Height,
