@@ -1,51 +1,31 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import PostCard, { PostResponse } from "../../../components/post/PostCard";
-import EditPostModal from "../../../components/post/EditPostModal";
+import PostCard, { PostResponse } from "@/components/post/PostCard";
+import EditPostModal from "@/components/post/EditPostModal";
+import type { CurrentUser } from "@/lib/user";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-interface CurrentUser {
-  id: string;
-  username: string;
+interface PostDetailViewProps {
+  postId: string;
+  /** The signed-in viewer, or null when nobody is signed in. */
+  currentUser: CurrentUser | null;
 }
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default function PostDetailPage({ params }: PageProps) {
+export default function PostDetailView({
+  postId,
+  currentUser,
+}: PostDetailViewProps) {
   const router = useRouter();
-  const resolvedParams = use(params);
-  const postId = decodeURIComponent(resolvedParams.id);
 
   const [post, setPost] = useState<PostResponse | null>(null);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [notFound, setNotFound] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!isCancelled && data?.status === "success" && data.data?.user) {
-          setCurrentUser(data.data.user);
-        }
-      })
-      .catch(() => {
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let isCancelled = false;

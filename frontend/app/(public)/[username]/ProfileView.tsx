@@ -1,26 +1,30 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import UserAvatar from "../../components/ui/UserAvatar";
-import AccountPill from "../../components/navigation/AccountPill";
-import EditProfileModal, { UserProfileData } from "../../components/profile/EditProfileModal";
-import PostCard, { PostResponse } from "../../components/post/PostCard";
-import EditPostModal from "../../components/post/EditPostModal";
+import UserAvatar from "@/components/ui/UserAvatar";
+import AccountPill from "@/components/navigation/AccountPill";
+import EditProfileModal, { UserProfileData } from "@/components/profile/EditProfileModal";
+import PostCard, { PostResponse } from "@/components/post/PostCard";
+import EditPostModal from "@/components/post/EditPostModal";
+import type { CurrentUser } from "@/lib/user";
+import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-interface PageProps {
-  params: Promise<{ username: string }>;
+interface ProfileViewProps {
+  targetUsername: string;
+  /** The signed-in viewer, or null when nobody is signed in. */
+  currentUser: CurrentUser | null;
 }
 
-export default function UserProfilePage({ params }: PageProps) {
+export default function ProfileView({
+  targetUsername,
+  currentUser,
+}: ProfileViewProps) {
   const router = useRouter();
-  const resolvedParams = use(params);
-  const targetUsername = decodeURIComponent(resolvedParams.username).replace(/^@/, "");
 
-  const [currentUser, setCurrentUser] = useState<UserProfileData | null>(null);
   const [profileUser, setProfileUser] = useState<UserProfileData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userNotFound, setUserNotFound] = useState<boolean>(false);
@@ -33,33 +37,9 @@ export default function UserProfilePage({ params }: PageProps) {
   const [postsError, setPostsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("Posts");
 
-  useEffect(() => {
-    const fetchSession = () => {
-      fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.status === "success" && data.data?.user) {
-            setCurrentUser(data.data.user);
-          } else {
-            setCurrentUser(null);
-          }
-        })
-        .catch(() => {
-          setCurrentUser(null);
-        });
-    };
-
-    fetchSession();
-
-    const handleFocus = () => {
-      fetchSession();
-    };
-
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, []);
+  // currentUser is resolved on the server, so a session that expired while the
+  // tab was in the background is picked up on the next focus.
+  useRefreshOnFocus();
 
   useEffect(() => {
     let isCancelled = false;
@@ -138,7 +118,6 @@ export default function UserProfilePage({ params }: PageProps) {
       });
     } catch {
     }
-    setCurrentUser(null);
     router.push("/login");
   };
 
@@ -465,7 +444,7 @@ export default function UserProfilePage({ params }: PageProps) {
           onClose={() => setIsEditModalOpen(false)}
           onUpdated={(updated) => {
             setProfileUser(updated);
-            setCurrentUser(updated);
+            router.refresh();
           }}
         />
       )}

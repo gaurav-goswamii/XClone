@@ -1,14 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import MessagesPage from "./page";
+import MessagesView from "./MessagesView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-const replace = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace }),
-}));
 
 const me = { id: "usr_me", name: "Me", username: "me" };
 const chat = {
@@ -43,7 +38,6 @@ let openChatResponse: unknown = null;
 const fetchMock = () => fetch as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  replace.mockClear();
   thread = [];
   openChatResponse = null;
 
@@ -53,8 +47,6 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/auth/me")) return ok({ user: me });
 
       if (url.endsWith("/api/chats") && method === "POST") {
         return openChatResponse ?? ok({ chat });
@@ -93,11 +85,11 @@ async function tick(ms: number) {
   });
 }
 
-describe("MessagesPage", () => {
+describe("MessagesView", () => {
   it("opens a chat by username and shows its messages", async () => {
     thread = [message(1, "usr_them", "hey, you there?")];
 
-    render(<MessagesPage />);
+    render(<MessagesView user={me} />);
     await screen.findByLabelText("Message someone by username");
     openChatWith("them");
 
@@ -108,7 +100,7 @@ describe("MessagesPage", () => {
   it("shows the server's message when the username does not exist", async () => {
     openChatResponse = fail(404, "user not found");
 
-    render(<MessagesPage />);
+    render(<MessagesView user={me} />);
     await screen.findByLabelText("Message someone by username");
     openChatWith("nobody");
 
@@ -117,7 +109,7 @@ describe("MessagesPage", () => {
   });
 
   it("sends a message and appends it to the thread", async () => {
-    render(<MessagesPage />);
+    render(<MessagesView user={me} />);
     await screen.findByLabelText("Message someone by username");
     openChatWith("them");
     await screen.findByText(/No messages yet/);
@@ -135,7 +127,7 @@ describe("MessagesPage", () => {
     try {
       thread = [message(1, me.id, "first")];
 
-      render(<MessagesPage />);
+      render(<MessagesView user={me} />);
       await tick(0);
       openChatWith("them");
       await tick(0);
@@ -159,7 +151,7 @@ describe("MessagesPage", () => {
   it("stops polling once the page unmounts", async () => {
     vi.useFakeTimers();
     try {
-      render(<MessagesPage />);
+      render(<MessagesView user={me} />);
       await tick(0);
       openChatWith("them");
       await tick(3000);

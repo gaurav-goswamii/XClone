@@ -2,19 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import UserAvatar from "../../components/ui/UserAvatar";
+import UserAvatar from "@/components/ui/UserAvatar";
+import type { CurrentUser } from "@/lib/user";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const POLL_INTERVAL_MS = 3000;
 const MESSAGE_LIMIT = 2000;
-
-interface CurrentUser {
-  id: string;
-  name: string;
-  username: string;
-  avatar_url?: string;
-}
 
 interface Chat {
   id: string;
@@ -43,12 +36,11 @@ function formatTime(iso: string): string {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-export default function MessagesPage() {
-  const router = useRouter();
+interface MessagesViewProps {
+  user: CurrentUser;
+}
 
-  const [user, setUser] = useState<CurrentUser | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
+export default function MessagesView({ user }: MessagesViewProps) {
   const [chat, setChat] = useState<Chat | null>(null);
   const [partnerUsername, setPartnerUsername] = useState<string>("");
 
@@ -65,29 +57,6 @@ export default function MessagesPage() {
   const [sendError, setSendError] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (isCancelled) return;
-        if (data?.status === "success" && data.data?.user) {
-          setUser(data.data.user);
-          setIsLoading(false);
-        } else {
-          router.replace("/login");
-        }
-      })
-      .catch(() => {
-        if (!isCancelled) router.replace("/login");
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [router]);
 
   const handleOpenChat = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -224,14 +193,6 @@ export default function MessagesPage() {
       setIsSending(false);
     }
   };
-
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-[#71767b]">Loading…</p>
-      </div>
-    );
-  }
 
   const remaining = MESSAGE_LIMIT - draft.length;
 

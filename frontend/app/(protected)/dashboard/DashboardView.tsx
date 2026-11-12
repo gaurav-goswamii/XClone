@@ -2,37 +2,34 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import UserAvatar from "../../components/ui/UserAvatar";
-import AccountPill from "../../components/navigation/AccountPill";
-import PostCard, { PostResponse } from "../../components/post/PostCard";
-import EditPostModal from "../../components/post/EditPostModal";
+import UserAvatar from "@/components/ui/UserAvatar";
+import AccountPill from "@/components/navigation/AccountPill";
+import PostCard, { PostResponse } from "@/components/post/PostCard";
+import EditPostModal from "@/components/post/EditPostModal";
 import {
   DraftPhoto,
   MAX_PHOTOS,
   rejectPhotoFile,
   toMediaPayload,
   uploadPostPhoto,
-} from "../../lib/postPhotos";
-
-interface UserProfile {
-  id: string;
-  name: string;
-  username: string;
-  email: string;
-  birth_date?: string;
-  avatar_url?: string;
-  bio?: string;
-  created_at?: string;
-}
+} from "@/lib/postPhotos";
+import type { CurrentUser } from "@/lib/user";
+import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const CHAR_LIMIT = 280;
 
-export default function DashboardPage() {
+interface DashboardViewProps {
+  user: CurrentUser;
+}
+
+export default function DashboardView({ user }: DashboardViewProps) {
   const router = useRouter();
 
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // The session was already resolved on the server, so there is no /me call and
+  // no loading state here. This only guards against the session expiring while
+  // the tab sat in the background.
+  useRefreshOnFocus();
 
   const [tweetText, setTweetText] = useState<string>("");
   const [feedPosts, setFeedPosts] = useState<PostResponse[]>([]);
@@ -54,48 +51,6 @@ export default function DashboardPage() {
       previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const verifySession = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/auth/me`, {
-          credentials: "include",
-        });
-        if (!res.ok) {
-          throw new Error("Unauthenticated");
-        }
-        const data = await res.json();
-        if (isMounted) {
-          if (data.status === "success" && data.data?.user) {
-            setUser(data.data.user);
-            setIsLoading(false);
-          } else {
-            setUser(null);
-            router.replace("/login");
-          }
-        }
-      } catch {
-        if (isMounted) {
-          setUser(null);
-          router.replace("/login");
-        }
-      }
-    };
-
-    verifySession();
-
-    const handleFocus = () => {
-      verifySession();
-    };
-
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      isMounted = false;
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [router]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -131,7 +86,6 @@ export default function DashboardPage() {
     } catch {
     }
 
-    setUser(null);
     router.replace("/login");
   };
 
@@ -283,15 +237,6 @@ export default function DashboardPage() {
       setFeedError("Network error. Could not delete post.");
     }
   };
-
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-[#1d9bf0] gap-3">
-        <div className="w-8 h-8 border-2 border-current border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs text-[#71767b] font-medium">Loading timeline...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-black text-[#e7e9ea] flex justify-center">
