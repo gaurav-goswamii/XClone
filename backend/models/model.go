@@ -27,6 +27,14 @@ type Post struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type Comment struct {
+	ID        string    `json:"id"`
+	PostID    string    `json:"post_id"`
+	UserID    string    `json:"user_id"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Chat struct {
 	    ID string `json:"id"`
 		User1ID string `json:"user1_id"`
@@ -67,3 +75,13 @@ type PostResponse struct {
 	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
+type CommentResponse struct {
+	ID             string    `json:"id"`
+	PostID         string    `json:"post_id"`
+	UserID         string    `json:"user_id"`
+	AuthorName     string    `json:"author_name"`
+	AuthorUsername string    `json:"author_username"`
+	AuthorAvatar   string    `json:"author_avatar"`
+	Content        string    `json:"content"`
+	CreatedAt      time.Time `json:"created_at"`
+}

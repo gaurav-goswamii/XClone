@@ -22,7 +22,7 @@ func normalizeMessageContent(content string) (string, error) {
 	if content == "" {
 		return "", ErrEmptyMessage
 	}
-
+	
 	if !utf8.ValidString(content) {
 		return "", ErrInvalidEncoding
 	}

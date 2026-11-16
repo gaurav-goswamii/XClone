@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"errors"
 	"backend/models"
+	"errors"
 )
 
 var (
@@ -10,6 +10,7 @@ var (
 	ErrUserAlreadyExists = errors.New("user already exists")
 	ErrPostNotFound      = errors.New("post not found")
 	ErrChatNotFound      = errors.New("chat not found")
+	ErrCommentNotFound   = errors.New("comment not found")
 )
 
 type UserRepository interface {
@@ -39,4 +40,11 @@ type ChatRepository interface {
 type MessageRepository interface {
 	Create(message *models.Message) error
 	ListByChat(chatID string) ([]models.Message, error)
+}
+
+type CommentRepository interface {
+	Create(comment *models.Comment) (*models.CommentResponse, error)
+	ListByPost(postID string, limit, offset int) ([]*models.CommentResponse, error)
+	GetByID(id string) (*models.Comment, error)
+	Delete(id, postID, userID string) error
 }

@@ -95,6 +95,16 @@ func Migrate(db *sql.DB) error {
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         content TEXT NOT NULL
 	);
+
+	CREATE TABLE IF NOT EXISTS comments (
+		id VARCHAR(64) PRIMARY KEY,
+		post_id VARCHAR(64) NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+		user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		content TEXT NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments (post_id, created_at);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
