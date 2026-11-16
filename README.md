@@ -10,82 +10,98 @@ The repository is structured as a monorepo separating the Next.js client from th
 
 ```
 XClone/
-├── compose.yaml                            # Docker Compose configuration for PostgreSQL 16
-├── frontend/                               # Next.js 16 Client Application
-│   ├── app/                                # Next.js App Router
-│   │   ├── [username]/                     # Dynamic user profile page & user post timeline
-│   │   │   └── page.tsx
-│   │   ├── dashboard/                      # Main feed and tweet timeline
-│   │   │   └── page.tsx
-│   │   ├── login/                          # User login page
-│   │   │   └── page.tsx
-│   │   ├── post/                           # Single post permalink
-│   │   │   └── [id]/
-│   │   │       └── page.tsx
-│   │   ├── signup/                         # User onboarding and registration
-│   │   │   └── page.tsx
-│   │   ├── favicon.ico                     # Application favicon
-│   │   ├── globals.css                     # Global styles & design tokens
-│   │   ├── layout.tsx                      # Root layout wrapper
-│   │   └── page.tsx                        # Landing / welcome page
-│   ├── components/                         # Modular UI Components
-│   │   ├── navigation/                     # Navigation bars & account popovers
-│   │   │   ├── AccountPill.tsx             # Floating user badge in sidebar
-│   │   │   └── AccountPopover.tsx          # Logout & account switch dropdown
-│   │   ├── post/                           # Post feed & timeline components
-│   │   │   ├── EditPostModal.tsx           # Edit & delete modal for a user's own post
-│   │   │   ├── PostCard.tsx                # Tweet card: relative timestamps, photo grid, actions
-│   │   │   └── PostCard.test.tsx           # Vitest + React Testing Library unit tests
-│   │   ├── profile/                        # User profile components
-│   │   │   └── EditProfileModal.tsx        # Profile editing modal (Avatar, Banner, Bio)
-│   │   └── ui/                             # Shared atomic components
-│   │       └── UserAvatar.tsx              # Fallback-aware avatar component
-│   ├── lib/                                # Shared frontend logic
-│   │   └── postPhotos.ts                   # Photo limits, upload call & DraftPhoto type
-│   ├── proxy.ts                            # Next.js route protection & auth proxy
-│   ├── eslint.config.mjs                   # ESLint configuration (React 19 rules)
-│   ├── next.config.ts                      # Next.js config with remote image domains
-│   ├── package.json                        # Dependencies & build scripts
-│   ├── postcss.config.mjs                  # PostCSS configuration
-│   ├── tsconfig.json                       # TypeScript compiler configuration
-│   └── vitest.config.ts                    # Vitest + jsdom test configuration
+├── compose.yaml                             # Docker Compose configuration for PostgreSQL 16
+├── frontend/                                # Next.js 16 Client Application
+│   ├── app/                                 # Next.js App Router, split into two route groups
+│   │   ├── (public)/                        # No session required — organisational only, not in the URL
+│   │   │   ├── [username]/                  # Dynamic user profile page & user post timeline
+│   │   │   │   ├── page.tsx                 # Thin server page: resolves params + currentUser
+│   │   │   │   └── ProfileView.tsx          # Client view: tabs, post list, edit/delete
+│   │   │   ├── login/                       # User login page
+│   │   │   │   └── page.tsx
+│   │   │   ├── post/[id]/                   # Single post permalink
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── PostDetailView.tsx       # Client view: single post, edit/delete, 404 state
+│   │   │   ├── signup/                      # Multi-step registration (name/DOB → password → username)
+│   │   │   │   └── page.tsx
+│   │   │   └── page.tsx                     # Landing / welcome page
+│   │   ├── (protected)/                     # Session required — layout.tsx gates on getCurrentUser()
+│   │   │   ├── dashboard/                   # Main feed and tweet timeline
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── DashboardView.tsx        # Client view: composer, feed, sidebar widgets
+│   │   │   ├── messages/                    # 1:1 direct messages
+│   │   │   │   ├── page.tsx
+│   │   │   │   ├── MessagesView.tsx         # Client view: open-by-username, send, 3s poll
+│   │   │   │   └── MessagesView.test.tsx    # Vitest + RTL tests, fetch stubbed
+│   │   │   └── layout.tsx                   # Redirects to /login when getCurrentUser() is null
+│   │   ├── favicon.ico                      # Application favicon
+│   │   ├── globals.css                      # Global styles & design tokens
+│   │   └── layout.tsx                       # Root layout wrapper
+│   ├── components/                          # Modular UI Components
+│   │   ├── navigation/                      # Navigation bars & account popovers
+│   │   │   ├── AccountPill.tsx              # Floating user badge in sidebar
+│   │   │   └── AccountPopover.tsx           # Logout & account switch dropdown
+│   │   ├── post/                            # Post feed & timeline components
+│   │   │   ├── EditPostModal.tsx            # Edit & delete modal for a user's own post
+│   │   │   ├── PostCard.tsx                 # Tweet card: relative timestamps, photo grid, actions
+│   │   │   └── PostCard.test.tsx            # Vitest + React Testing Library unit tests
+│   │   ├── profile/                         # User profile components
+│   │   │   └── EditProfileModal.tsx         # Profile editing modal (Avatar, Banner, Bio)
+│   │   └── ui/                               # Shared atomic components
+│   │       └── UserAvatar.tsx               # Fallback-aware avatar component
+│   ├── lib/                                 # Shared frontend logic
+│   │   ├── auth.ts                          # getCurrentUser() — server-only, cached per request
+│   │   ├── user.ts                           # Shared CurrentUser type (safe for client imports)
+│   │   ├── useRefreshOnFocus.ts             # Re-validates session on window focus
+│   │   └── postPhotos.ts                    # Photo limits, upload call & DraftPhoto type
+│   ├── proxy.ts                             # Next.js 16's renamed middleware.ts — UX redirect only
+│   ├── eslint.config.mjs                    # ESLint configuration (React 19 rules)
+│   ├── next.config.ts                       # Next.js config with remote image domains
+│   ├── package.json                         # Dependencies & build scripts
+│   ├── postcss.config.mjs                   # PostCSS configuration
+│   ├── tsconfig.json                        # TypeScript compiler configuration
+│   └── vitest.config.ts                     # Vitest + jsdom test configuration
 │
-├── backend/                                # Go (Golang) REST API Server
-│   ├── .env.example                        # Template for backend/.env — copy and fill in
-│   ├── config/                             # Environment parser & server configuration
+├── backend/                                 # Go (Golang) REST API Server
+│   ├── .env.example                         # Template for backend/.env — copy and fill in
+│   ├── config/                              # Environment parser & server configuration
 │   │   └── config.go
-│   ├── controllers/                        # HTTP controllers & request handlers
-│   │   ├── auth_controller.go              # Register, Login, Me, Logout, Profile handlers
-│   │   ├── post_controller.go              # Post CRUD & feed handlers
-│   │   ├── upload_controller.go            # Media & Cloudinary image upload handlers
-│   │   └── controller.go                   # Health check & base controllers
-│   ├── database/                           # Database connection & schema setup
-│   │   └── postgres.go                     # PostgreSQL pooling & table migrations
-│   ├── middleware/                         # HTTP middleware stack
-│   │   └── middleware.go                   # CORS & structured request logging only
-│   ├── models/                             # Domain models & entities
-│   │   └── model.go                        # User & Post data structures
-│   ├── repository/                         # Persistence abstraction layer
-│   │   ├── repository.go                   # UserRepository & PostRepository interface definitions
-│   │   └── postgres_repo.go                # PostgreSQL SQL implementation
-│   ├── routes/                             # Route definitions & router setup
-│   │   └── routes.go                       # Route registration & dependency injection
-│   ├── service/                            # Core business logic layer
-│   │   ├── auth_service.go                 # Registration, login, validation & hashing
-│   │   ├── cloudinary_deleter.go           # Destroys stored photos a post no longer references
-│   │   ├── post_media.go                   # Photo validation & public_id ownership checks
-│   │   ├── post_service.go                 # Post CRUD, photo resolution & timeline logic
-│   │   └── post_service_test.go            # Go unit tests for the service layer
-│   ├── utils/                              # Cryptographic & utility helpers
-│   │   ├── auth.go                         # JWT token creation, parsing & validation
-│   │   └── utils.go                        # Utility helpers
-│   ├── go.mod                              # Go module specifications
-│   ├── go.sum                              # Go dependency checksums
-│   └── main.go                             # Backend server initialization & entrypoint
+│   ├── controllers/                         # HTTP controllers & request handlers
+│   │   ├── auth_controller.go               # Register, Login, Me, Logout, Profile handlers
+│   │   ├── chat.go                          # Open/reuse a 1:1 chat by username
+│   │   ├── message.go                       # List & send messages within a chat
+│   │   ├── post_controller.go               # Post CRUD & feed handlers
+│   │   ├── upload_controller.go             # Media & Cloudinary image upload handlers
+│   │   └── controller.go                    # Health check & shared response helpers
+│   ├── database/                            # Database connection & schema setup
+│   │   └── postgres.go                      # PostgreSQL pooling & table migrations
+│   ├── middleware/                          # HTTP middleware stack
+│   │   └── middleware.go                    # CORS & structured request logging only
+│   ├── models/                               # Domain models & entities
+│   │   └── model.go                         # User, Post, Chat & Message data structures
+│   ├── repository/                          # Persistence abstraction layer
+│   │   ├── repository.go                    # UserRepository, PostRepository, ChatRepository, MessageRepository
+│   │   └── postgres_repo.go                 # PostgreSQL SQL implementation of all four
+│   ├── routes/                              # Route definitions & router setup
+│   │   └── routes.go                        # Route registration & dependency injection
+│   ├── service/                             # Core business logic layer
+│   │   ├── auth_service.go                  # Registration, login, validation & hashing
+│   │   ├── chat.go                          # Chat lookup/creation, canonicalPair, participant checks
+│   │   ├── message.go                       # Message validation (length, UTF-8) & persistence
+│   │   ├── cloudinary_deleter.go            # Destroys stored photos a post no longer references
+│   │   ├── post_media.go                    # Photo validation & public_id ownership checks
+│   │   ├── post_service.go                  # Post CRUD, photo resolution & timeline logic
+│   │   └── post_service_test.go             # Go unit tests for the service layer
+│   ├── utils/                                # Cryptographic & utility helpers
+│   │   ├── auth.go                          # JWT token creation, parsing & validation
+│   │   └── utils.go                         # ID generation & other utility helpers
+│   ├── go.mod                                # Go module specifications
+│   ├── go.sum                                # Go dependency checksums
+│   └── main.go                               # Backend server initialization & entrypoint
 │
-├── .gitignore                              # Root git ignore rules
-├── LICENSE                                 # MIT license
-└── README.md                               # Project documentation
+├── .gitignore                               # Root git ignore rules
+├── LICENSE                                  # MIT license
+└── README.md                                # Project documentation
 ```
 
 ---
@@ -148,6 +164,14 @@ XClone/
   - Reusable `PostCard` component featuring relative timestamps ("now", "5m", "2h", "3d"), an
     attached-photo grid, action button counters (replies, retweets, likes), and direct profile
     navigation.
+- 💬 **1:1 Direct Messages**:
+  - Open a conversation by typing someone's `@username`; the same pair always resolves to the same
+    chat regardless of who opens it first.
+  - Messages (up to 2000 characters) are delivered by polling every 3 seconds while the chat is
+    open — there is no WebSocket connection, so a new reply can take a few seconds to appear.
+  - Every read and write is scoped to chat participants server-side: a guessed chat ID gets `403`,
+    never someone else's messages.
+  - One conversation at a time — there is no inbox or conversation list yet.
 - 👤 **User Profiles & Customization**:
   - Dynamic user profile routes (`/[username]`).
   - Full profile editing modal supporting custom display names, bios, avatars, and banner images.
@@ -225,9 +249,6 @@ always present and never `null`:
 ]
 ```
 
-The older `media_url` field is **legacy**: it mirrors the first photo's URL for backwards
-compatibility. `media[]` is authoritative.
-
 | Error | Status |
 | :--- | :---: |
 | No text and no photos | `400` |
@@ -280,6 +301,29 @@ Shared by both:
 | Caption over 280 characters, over 4 photos, or an invalid `public_id` | `400` |
 | Nothing left after the edit (no text and no photos) | `400` |
 | Request body over 64KB | `413` |
+
+### Chats & Messages
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/api/chats` | Open (or reuse) a 1:1 chat with `{ "username": "..." }` | Yes |
+| `GET` | `/api/chats/{id}/messages` | List every message in a chat, oldest first | Yes |
+| `POST` | `/api/chats/{id}/messages` | Send a message with `{ "content": "..." }` (max 2000 chars) | Yes |
+
+A chat is keyed by the unordered pair of participants — opening a chat with `@bob` as Alice and
+opening a chat with `@alice` as Bob both resolve to the same row. `GET`/`POST` on
+`/api/chats/{id}/messages` both re-check that the caller is one of the chat's two participants
+before touching any row; a chat ID that exists but belongs to someone else answers `403`, not `404`,
+so its existence is not leaked either. `GET` returns the **entire** message history on every call —
+there is no pagination yet, and the frontend polls this endpoint every 3 seconds while a chat is
+open.
+
+| Error | Status |
+| :--- | :---: |
+| Missing or invalid auth cookie | `401` |
+| Chat does not exist | `404` |
+| Caller is not a participant in the chat | `403` |
+| Starting a chat with yourself, or a username that doesn't exist | `400` / `404` |
+| Empty message, or over 2000 characters | `400` |
 
 ### Media & System
 | Method | Endpoint | Description | Auth Required |
@@ -454,18 +498,19 @@ npm run build
 Use `npx vitest run` for a one-shot run. `npm test` is bare `vitest`, which starts an
 interactive watch process and never exits — it is not suitable for CI or scripted checks.
 
-**Test coverage is thin.** There are two test files:
+**Test coverage is thin.** There are three test files:
 
 | File | Covers |
 | :--- | :--- |
 | `backend/service/post_service_test.go` | `droppedPublicIDs` — which photos an edit removes |
 | `frontend/components/post/PostCard.test.tsx` | Whether a post renders an attached photo or falls back to text-only |
+| `frontend/app/(protected)/messages/MessagesView.test.tsx` | Opening a chat by username, the 404 case, sending a message, the 3s poll picking up a reply without duplicating it, and the poll stopping on unmount |
 
-No controller, repository, or end-to-end test exists for the create/update/delete paths, and the
-Cloudinary release path has no test at all. The repository-layer interfaces in
-`backend/repository/repository.go` exist partly to make that straightforward to add.
+No controller, repository, or end-to-end test exists for the post create/update/delete paths or the
+chat/message paths, and the Cloudinary release path has no test at all. The repository-layer
+interfaces in `backend/repository/repository.go` exist partly to make that straightforward to add.
 
-`gofmt` is **not** currently clean (`gofmt -l backend/` lists eleven files) and `npm run lint`
+`gofmt` is **not** currently clean (`gofmt -l backend/` lists sixteen files) and `npm run lint`
 emits one warning (`@next/next/no-img-element`, from the photo grid). Neither is wired into the
 checks above, so both are expected output rather than a regression you introduced.
 
