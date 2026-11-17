@@ -13,6 +13,7 @@ func SetupRouter(
 	cfg *config.Config,
 	userRepo repository.UserRepository,
 	postRepo repository.PostRepository,
+	commentRepo repository.CommentRepository,
 	chatRepo repository.ChatRepository,
 	messageRepo repository.MessageRepository,
 ) http.Handler {
@@ -25,7 +26,7 @@ func SetupRouter(
 		cfg.CloudinaryAPIKey,
 		cfg.CloudinaryAPISecret,
 	)
-	
+
 	postService := service.NewPostService(
 		postRepo,
 		cfg.CloudinaryCloudName,
@@ -34,6 +35,7 @@ func SetupRouter(
 	)
 
 	chatService := service.NewChatService(chatRepo, messageRepo, userRepo)
+	commentService := service.NewCommentService(commentRepo, postRepo)
 
 	authController := controllers.NewAuthController(
 		authService,
@@ -54,6 +56,10 @@ func SetupRouter(
 		chatService,
 		cfg.JWTSecret,
 	)
+	commentController := controllers.NewCommentController(
+		commentService,
+		cfg.JWTSecret,
+	)
 
 	mux.HandleFunc("/api/health", controllers.HealthCheckHandler)
 
@@ -67,6 +73,8 @@ func SetupRouter(
 	mux.HandleFunc("/api/posts/feed", postController.FeedHandler)
 	mux.HandleFunc("/api/posts/user", postController.UserPostsHandler)
 	mux.HandleFunc("/api/posts/{id}", postController.PostByIDHandler)
+	mux.HandleFunc("/api/posts/{id}/comments", commentController.PostCommentsHandler)
+	mux.HandleFunc("/api/comments/{id}", commentController.DeleteCommentHandler)
 
 	mux.HandleFunc("/api/upload/avatar", uploadController.UploadAvatarHandler)
 	mux.HandleFunc("/api/upload/post-media", uploadController.UploadPostMediaHandler)

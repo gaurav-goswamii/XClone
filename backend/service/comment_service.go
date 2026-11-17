@@ -7,46 +7,47 @@ import (
 	"strings"
 	"unicode/utf8"
 )
+
 const MaxCommentRunes = 280
 
 var (
-    ErrEmptyComment      = errors.New("comment cannot be empty")
-    ErrCommentTooLong    = errors.New("comment exceeds 280 characters")
-    ErrNotCommentOwner   = errors.New("you can only delete your own comments")
-    ErrUnauthorizedUser  = errors.New("unauthorized user")
+	ErrEmptyComment     = errors.New("comment cannot be empty")
+	ErrCommentTooLong   = errors.New("comment exceeds 280 characters")
+	ErrNotCommentOwner  = errors.New("you can only delete your own comments")
+	ErrUnauthorizedUser = errors.New("unauthorized user")
 
-    ErrCommentNotFound   = repository.ErrCommentNotFound
+	ErrCommentNotFound = repository.ErrCommentNotFound
 )
 
 type CommentService struct {
 	commentRepo repository.CommentRepository
-	postRepo repository.PostRepository
+	postRepo    repository.PostRepository
 }
 
 func NewCommentService(
 	commentRepo repository.CommentRepository,
 	postRepo repository.PostRepository,
-) *CommentService{
+) *CommentService {
 	return &CommentService{
 		commentRepo: commentRepo,
-		postRepo: postRepo,
+		postRepo:    postRepo,
 	}
 }
 
 func (s *CommentService) CreateComment(
 	comment *models.Comment,
-)(*models.CommentResponse, error) {
+) (*models.CommentResponse, error) {
 	if comment == nil {
-		return nil,ErrEmptyComment
+		return nil, ErrEmptyComment
 	}
 	comment.Content = strings.TrimSpace(comment.Content)
-	if comment.Content == ""{
+	if comment.Content == "" {
 		return nil, ErrEmptyComment
 	}
 	if utf8.RuneCountInString(comment.Content) > MaxCommentRunes {
 		return nil, ErrCommentTooLong
 	}
-	if strings.TrimSpace(comment.UserID) == ""{
+	if strings.TrimSpace(comment.UserID) == "" {
 		return nil, ErrUnauthorized
 	}
 	if _, err := s.postRepo.GetByID(comment.PostID); err != nil {
@@ -69,21 +70,17 @@ func (s *CommentService) GetComments(
 }
 
 func (s *CommentService) DeleteComment(
-	commentID, postID, userID string,
-)error {
+	commentID, userID string,
+) error {
 	if strings.TrimSpace(userID) == "" {
 		return ErrUnauthorizedUser
 	}
 	comment, err := s.commentRepo.GetByID(commentID)
 	if err != nil {
-		return err 
+		return err
 	}
 	if comment.UserID != userID {
 		return ErrNotCommentOwner
 	}
-	if comment.PostID != postID {
-		return ErrCommentNotFound
-	}
-	return s.commentRepo.Delete(commentID, postID, userID)
+	return s.commentRepo.Delete(comment.ID, comment.PostID, userID)
 }
-

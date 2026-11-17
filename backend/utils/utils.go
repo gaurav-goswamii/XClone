@@ -38,3 +38,11 @@ func GenerateMessageID() string {
 	}
 	return fmt.Sprintf("message_%s", token)
 }
+
+func GenerateCommentID() string {
+    token, err := GenerateRandomToken(8)
+    if err != nil {
+        return fmt.Sprintf("comment_%d", time.Now().UnixNano())
+    }
+    return fmt.Sprintf("comment_%s", token)
+}

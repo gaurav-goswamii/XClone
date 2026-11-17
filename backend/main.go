@@ -27,9 +27,10 @@ func main() {
 	log.Printf("✅ PostgreSQL migrations applied successfully")
 	userRepo := repository.NewPostgresUserRepository(db)
 	postRepo := repository.NewPostgresPostRepository(db)
+	commentRepo := repository.NewPostgresCommentRepository(db)
 	chatRepo := repository.NewPostgresChatRepository(db)
 	messageRepo := repository.NewPostgresMessageRepository(db)
-	router := routes.SetupRouter(cfg, userRepo, postRepo, chatRepo, messageRepo)
+	router := routes.SetupRouter(cfg, userRepo, postRepo, commentRepo, chatRepo, messageRepo)
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("🚀 Starting XClone Backend on http://localhost%s (Environment: %s)\n", addr, cfg.Environment)
 	if err := http.ListenAndServe(addr, router); err != nil {
