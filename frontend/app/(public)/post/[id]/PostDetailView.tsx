@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import PostCard, { PostResponse } from "@/components/post/PostCard";
 import EditPostModal from "@/components/post/EditPostModal";
 import type { CurrentUser } from "@/lib/user";
+import CommentCard, {
+  type CommentResponse,
+} from "@/components/comment/CommentCard"
+import CommentComposer from "@/components/comment/CommentComposer";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -22,6 +26,7 @@ export default function PostDetailView({
   const router = useRouter();
 
   const [post, setPost] = useState<PostResponse | null>(null);
+  const [comments, setComments] = useState<CommentResponse[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [notFound, setNotFound] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -57,6 +62,38 @@ export default function PostDetailView({
     };
   }, [postId]);
 
+
+useEffect(() => {
+  let isCancelled = false;
+
+  fetch(
+    `${API_BASE}/api/posts/${encodeURIComponent(postId)}/comments`,
+    { credentials: "include" }
+  )
+    .then(async (res) => {
+      if (!res.ok) return null;
+      return res.json();
+    })
+    .then((data) => {
+      if (
+        !isCancelled &&
+        data?.status === "success" &&
+        Array.isArray(data.data?.comments)
+      ) {
+        setComments(data.data.comments);
+      }
+    })
+    .catch(() => {
+      if (!isCancelled) setComments([]);
+    });
+
+  return () => {
+    isCancelled = true;
+  };
+}, [postId]);
+
+  
+
   const handleDelete = async () => {
     if (!window.confirm("Delete this post? This cannot be undone.")) return;
 
@@ -79,6 +116,42 @@ export default function PostDetailView({
       setActionError("Network error. Could not delete post.");
     }
   };
+
+  const handleCommentPosted = (comment: CommentResponse) => {
+    setComments((existingComments) => [...existingComments, comment])
+
+    setPost((existingPost) => 
+    existingPost?{...existingPost, replies: existingPost.replies + 1}
+  : existingPost)  
+}
+
+const handleCommentDelete = async (commentId: string) => {
+  if(!window.confirm("Delete this comment? This cannot be undone.")) return
+
+  setActionError(null)
+
+  try{
+    const res = await fetch(`${API_BASE}/api/comments/${encodeURIComponent(commentId)}`,
+  {
+    method: "DELETE",
+    credentials: "include"
+  })
+  if (res.ok) {
+    setComments((existingComments) => existingComments.filter((comment) => comment.id !== commentId))
+
+    setPost((existingPost) => existingPost?{...existingPost, replies:Math.max(0, existingPost.replies -1)}
+  :existingPost)
+  return
+  }
+
+  const data = await res.json().catch(() => null)
+  setActionError(data?.message || "Failed to delete comment. Please try again")
+  } catch {
+    setActionError("Network error. Could not delete comment.")
+  }
+}
+
+
 
   const isOwner = Boolean(post && currentUser && post.user_id === currentUser.id);
   const wasEdited = Boolean(
@@ -140,6 +213,15 @@ export default function PostDetailView({
                 <p>Edited {new Date(post.updated_at).toLocaleString()}</p>
               )}
             </div>
+            {currentUser && (
+              <CommentComposer postId={postId} onPosted={handleCommentPosted}/>
+            )}
+
+            {comments.map((comment) => (
+              <CommentCard key={comment.id} comment={comment} isOwner={comment.user_id === currentUser?.id}
+              onDelete={handleCommentDelete}/>
+              
+            ))}
           </>
         )}
       </main>

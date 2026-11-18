@@ -39,7 +39,7 @@ export default function CommentComposer({
 
         try{
             const response = await fetch(
-                `${API_BASE}/api/posts/${postId}/comments`,
+                `${API_BASE}/api/posts/${encodeURIComponent(postId)}/comments`,
                 {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
@@ -84,7 +84,18 @@ export default function CommentComposer({
     rows={3}
     aria-label="Write a comment"
     placeholder="Write a comment..."
-    
+    className="w-full resize-none bg-transparent text-[#e7e9ea]
+    placeholder-[#71767b] outline-none disabled:opacity-60"/>
+
+    <div className="mt-3 flex justify-end">
+        <button
+        type="submit"
+        disabled={isSubmitting || !trimmedContent}
+        className="rounded-full bg-[#1d9bf0] px-4 py-1.5 text-sm font-bold text-white
+        transition hover:bg-[#1a8cd8] disabled:cursor-not-allowed disabled:opacity-50">
+        {isSubmitting ? "Posting...":"Reply"}
+        </button>
+    </div>
         </form>
     )
 

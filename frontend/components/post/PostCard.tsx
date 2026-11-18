@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import UserAvatar from "../ui/UserAvatar";
+import { useRouter } from "next/navigation";
 
 export interface PostMedia {
   ordinal: number;
@@ -37,36 +38,6 @@ interface PostCardProps {
   onDelete?: (postId: string) => void;
 }
 
-function formatRelativeTime(dateString: string): string {
-  try {
-    const postDate = new Date(dateString);
-    if (isNaN(postDate.getTime())) {
-      return "";
-    }
-    const now = new Date();
-    const diffSeconds = Math.max(0, Math.floor((now.getTime() - postDate.getTime()) / 1000));
-
-    if (diffSeconds < 60) {
-      return "now";
-    }
-    const diffMinutes = Math.floor(diffSeconds / 60);
-    if (diffMinutes < 60) {
-      return `${diffMinutes}m`;
-    }
-    const diffHours = Math.floor(diffMinutes / 60);
-    if (diffHours < 24) {
-      return `${diffHours}h`;
-    }
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffDays < 7) {
-      return `${diffDays}d`;
-    }
-    return postDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
-    return "";
-  }
-}
-
 export default function PostCard({
   post,
   isOwner = false,
@@ -76,9 +47,10 @@ export default function PostCard({
   onEdit,
   onDelete,
 }: PostCardProps) {
-  const timeFormatted = formatRelativeTime(post.created_at);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const canManage = isOwner && Boolean(onEdit || onDelete);
+  const router = useRouter()
+  const postHref = `/post/${encodeURIComponent(post.id)}`
 
   return (
     <article
@@ -113,18 +85,6 @@ export default function PostCard({
             >
               @{post.author_username}
             </Link>
-            {timeFormatted && (
-              <>
-                <span className="text-[#71767b]">·</span>
-                <Link
-                  href={`/post/${post.id}`}
-                  className="text-[#71767b] shrink-0 hover:underline cursor-pointer"
-                  title={new Date(post.created_at).toLocaleString()}
-                >
-                  {timeFormatted}
-                </Link>
-              </>
-            )}
           </div>
 
           {canManage && (
@@ -188,7 +148,8 @@ export default function PostCard({
           )}
         </div>
 
-        <p className="mt-1 text-[15px] leading-relaxed text-[#e7e9ea] break-words whitespace-pre-line">
+       <Link href={postHref} aria-label={`Open post by @${post.author_username}`} className="block">
+         <p className="mt-1 text-[15px] leading-relaxed text-[#e7e9ea] break-words whitespace-pre-line">
           {post.content} 
         </p>
 
@@ -203,11 +164,18 @@ export default function PostCard({
             ))}
             </div>
         )}
+       </Link>
 
         <div className="mt-3 flex items-center justify-between max-w-md text-[#71767b] text-xs">
           <button
             type="button"
-            onClick={() => onReply?.(post.id)}
+            onClick={() => {
+              if (onReply) {
+                onReply(post.id)
+              } else {
+                router.push(postHref)
+              }
+            }}
             className="flex items-center gap-2 group hover:text-[#1d9bf0] transition cursor-pointer p-1 -m-1 rounded-full"
             aria-label="Reply"
           >
