@@ -296,17 +296,24 @@ func (r *PostgresPostRepository) attachMedia(posts []*models.PostResponse) error
 	return nil
 }
 
-func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error) {
+func (r *PostgresPostRepository) GetByID(id string,
+	viewerID string) (*models.PostResponse, error) {
 	query := `
 		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
-		       p.content, p.likes, p.retweets, p.replies,
+		       p.content, p.likes, EXISTS (
+                SELECT 1
+                FROM post_likes pl
+                WHERE pl.post_id = p.id
+                  AND pl.user_id = $2
+            ) AS liked_by_viewer, p.retweets, p.replies,
 		       p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
 		WHERE p.id = $1
 	`
 	var post models.PostResponse
-	err := r.db.QueryRow(query, strings.TrimSpace(id)).Scan(
+	err := r.db.QueryRow(query, strings.TrimSpace(id),
+	strings.TrimSpace(viewerID)).Scan(
 		&post.ID,
 		&post.UserID,
 		&post.AuthorName,
@@ -314,6 +321,7 @@ func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error
 		&post.AuthorAvatar,
 		&post.Content,
 		&post.Likes,
+		&post.LikedByViewer,
 		&post.Retweets,
 		&post.Replies,
 		&post.CreatedAt,
@@ -332,7 +340,8 @@ func (r *PostgresPostRepository) GetByID(id string) (*models.PostResponse, error
 	return &post, nil
 }
 
-func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResponse, error) {
+func (r *PostgresPostRepository) ListFeed(limit, offset int,
+	viewerID string) ([]*models.PostResponse, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -342,14 +351,21 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 
 	query := `
 		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
-		       p.content, p.likes, p.retweets, p.replies,
+		       p.content, p.likes,
+        EXISTS (
+            SELECT 1
+            FROM post_likes pl
+            WHERE pl.post_id = p.id
+              AND pl.user_id = $3
+        ) AS liked_by_viewer, p.retweets, p.replies,
 		       p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
 		ORDER BY p.created_at DESC
 		LIMIT $1 OFFSET $2
 	`
-	rows, err := r.db.Query(query, limit, offset)
+	rows, err := r.db.Query(query, limit, offset,
+	strings.TrimSpace(viewerID))
 	if err != nil {
 		return nil, err
 	}
@@ -366,6 +382,7 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 			&post.AuthorAvatar,
 			&post.Content,
 			&post.Likes,
+			&post.LikedByViewer,
 			&post.Retweets,
 			&post.Replies,
 			&post.CreatedAt,
@@ -386,7 +403,8 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int) ([]*models.PostResp
 	return posts, nil
 }
 
-func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) ([]*models.PostResponse, error) {
+func (r *PostgresPostRepository) ListByUser(username string, limit, offset int,
+	viewerID string) ([]*models.PostResponse, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -396,7 +414,13 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int) 
 
 	query := `
 		SELECT p.id, p.user_id, u.name, u.username, COALESCE(u.avatar_url, ''),
-		       p.content, p.likes, p.retweets, p.replies,
+		       p.content, p.likes,
+        EXISTS (
+            SELECT 1
+            FROM post_likes pl
+            WHERE pl.post_id = p.id
+              AND pl.user_id = $4
+        ) AS liked_by_viewer, p.retweets, p.replies,
 		       p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.user_id = u.id

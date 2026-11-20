@@ -69,10 +69,16 @@ type PostResponse struct {
 	Content        string      `json:"content"`
 	Media          []PostMedia `json:"media"`
 	Likes          int         `json:"likes"`
+	LikedByViewer  bool        `json:"liked_by_viewer"`
 	Retweets       int         `json:"retweets"`
 	Replies        int         `json:"replies"`
 	CreatedAt      time.Time   `json:"created_at"`
 	UpdatedAt      time.Time   `json:"updated_at"`
+}
+
+type PostLikeResult struct {
+	Liked bool `json:"liked"`
+	Likes int `json:"likes"`
 }
 
 type CommentResponse struct {
