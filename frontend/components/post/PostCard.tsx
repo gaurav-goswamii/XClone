@@ -23,6 +23,7 @@ export interface PostResponse {
   content: string;
   media?: PostMedia[];
   likes: number;
+  liked_by_viewer: boolean
   retweets: number;
   replies: number;
   created_at: string;
@@ -31,7 +32,8 @@ export interface PostResponse {
 interface PostCardProps {
   post: PostResponse;
   isOwner?: boolean;
-  onLike?: (postId: string) => void;
+  isLikePending?: boolean
+  onLike?: (postId: string, nextLiked: boolean) => void;
   onRetweet?: (postId: string) => void;
   onReply?: (postId: string) => void;
   onEdit?: (post: PostResponse) => void;
@@ -41,6 +43,7 @@ interface PostCardProps {
 export default function PostCard({
   post,
   isOwner = false,
+  isLikePending = false,
   onLike,
   onRetweet,
   onReply,
@@ -211,13 +214,26 @@ export default function PostCard({
 
           <button
             type="button"
-            onClick={() => onLike?.(post.id)}
-            className="flex items-center gap-2 group hover:text-[#f4212e] transition cursor-pointer p-1 -m-1 rounded-full"
-            aria-label="Like"
+            disabled={isLikePending}
+            onClick={() =>
+               onLike?.(post.id, !post.liked_by_viewer)}
+            className={`flex items-center gap-2 group transition cursor-pointer p-1 -m-1 rounded-full ${
+    post.liked_by_viewer
+      ? "text-[#f4212e]"
+      : "text-[#71767b] hover:text-[#f4212e]"
+  } ${isLikePending ? "opacity-60 cursor-wait" : ""}`}
+            aria-label={post.liked_by_viewer ? "Unlike" : "Like"}
+            aria-pressed={post.liked_by_viewer}
           >
             <div className="p-1.5 rounded-full group-hover:bg-[#f4212e]/10 transition">
-              <svg className="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="1.8">
-                <path
+    <svg
+      className={`w-4 h-4 stroke-current ${
+        post.liked_by_viewer ? "fill-current" : "fill-none"
+      }`}
+      viewBox="0 0 24 24"
+      strokeWidth="1.8"
+    >
+      <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"

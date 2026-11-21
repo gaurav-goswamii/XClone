@@ -89,24 +89,27 @@ func (s *PostService) CreatePost(userID, content string, refs []MediaRef) (*mode
 	return s.postRepo.GetByID(postID)
 }
 
-func (s *PostService) GetFeed(limit, offset int) ([]*models.PostResponse, error) {
-	return s.postRepo.ListFeed(limit, offset)
+func (s *PostService) GetFeed(limit, offset int, viewerID string) ([]*models.PostResponse, error) {
+	return s.postRepo.ListFeed(limit, offset, strings.TrimSpace(viewerID))
 }
 
-func (s *PostService) GetUserPosts(username string, limit, offset int) ([]*models.PostResponse, error) {
+func (s *PostService) GetUserPosts(username string, limit, offset int,
+	viewerID string) ([]*models.PostResponse, error) {
 	cleanUsername := strings.TrimSpace(username)
 	if cleanUsername == "" {
 		return []*models.PostResponse{}, nil
 	}
-	return s.postRepo.ListByUser(cleanUsername, limit, offset)
+	return s.postRepo.ListByUser(cleanUsername, limit, offset,
+	strings.TrimSpace(viewerID))
 }
 
-func (s *PostService) GetPost(postID string) (*models.PostResponse, error) {
-	trimmedPostID := strings.TrimSpace(postID)
-	if trimmedPostID == "" {
+func (s *PostService) GetPost(postID string,
+	viewerID string) (*models.PostResponse, error) {
+	postID := strings.TrimSpace(postID)
+	if postID == "" {
 		return nil, ErrPostNotFound
 	}
-	return s.postRepo.GetByID(trimmedPostID)
+	return s.postRepo.GetByID(postID, strings.TrimSpace(viewerID))
 }
 
 func (s *PostService) UpdatePost(
@@ -172,6 +175,7 @@ func (s *PostService) UpdatePost(
 
 	return s.postRepo.GetByID(trimmedPostID)
 }
+
 func droppedPublicIDs(before, after []models.PostMedia) []string {
 	kept := make(map[string]bool, len(after))
 	for _, item := range after {
@@ -239,3 +243,30 @@ func (s *PostService) DeletePost(userID, postID string) error {
 
 	return nil
 }
+
+func (s *PostService) LikePost(userID, postID string) (*models.PostLikeResult, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, ErrUnauthorizedPost
+	}
+
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
+		return nil, ErrPostNotFound
+	}
+	return s.postRepo.LikePost(postID, userID)
+}
+
+func (s *PostService) UnlikePost(userID, postID string) (*models.PostLikeResult, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, ErrUnauthorizedPost
+	}
+
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
+		return nil, ErrPostNotFound
+	}
+	return s.postRepo.UnlikePost(postID, userID)
+}
+

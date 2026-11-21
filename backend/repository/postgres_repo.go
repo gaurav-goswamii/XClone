@@ -428,7 +428,7 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int,
 		ORDER BY p.created_at DESC
 		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.Query(query, strings.TrimSpace(username), limit, offset)
+	rows, err := r.db.Query(query, strings.TrimSpace(viewerID), limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -445,6 +445,7 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int,
 			&post.AuthorAvatar,
 			&post.Content,
 			&post.Likes,
+			&post.LikedByViewer,
 			&post.Retweets,
 			&post.Replies,
 			&post.CreatedAt,
@@ -585,6 +586,111 @@ func (r *PostgresPostRepository) Delete(id, userID string) error {
 		return ErrPostNotFound
 	}
 	return nil
+}
+
+func (r *PostgresPostRepository) LikePost(postID, userID string) (*models.PostLikeResult, error) {
+	postID = strings.TrimSpace(postID)
+	userID = strings.TrimSpace(userID)
+    
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	var exists bool
+	err = tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`, postID).Scan(
+		&exists)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, ErrPostNotFound
+		}
+
+		result, err := tx.Exec(`INSERT INTO post_likes (post_id, user_id)
+		VALUES ($1, $2)
+		ON CONFLICT (post_id, user_id) DO NOTHING`, postID, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		inserted, err := result.RowsAffected()
+		if err != nil {
+			return nil, err
+		}
+
+		if inserted == 1 {
+			if _, err := tx.Exec(`
+			UPDATE posts
+			SET likes = likes + 1
+			WHERE id = $1`, postID)
+			err != nil {
+				return nil, err
+			}
+		}
+
+		var likes int
+		if err := tx.QueryRow(
+			`SELECT likes FROM posts WHERE id = $1`, postID
+		).Scan(&likes) err != nil {
+			return nil, err
+		}
+
+		if err := tx.Commit() err != nil {
+			return nil, err
+		}
+
+		return &models.PostLikeResult{
+			Liked: true,
+			Likes: likes,
+		}, nil
+}
+
+func (r *PostgresPostRepository) UnlikePost(postID, userID string) (*models.PostLikeResult, error) {
+	postID = strings.TrimSpace(postID)
+	userID = strings.TrimSpace(userID)
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	var exists bool
+	err = tx.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`, postID
+	).Scan(&exists) if err != nil { return nil, err}
+	if !exists { return nil, ErrPostNotFound}
+
+	result, err := tx.Exec(`DELETE FROM post_likes
+	WHERE post_id = $1 AND user_id = $2`, postID, userID)
+	if err != nil { return nil, err}
+
+	deleted, err := result.RowsAffected()
+	if err != nil { return nil, err}
+
+	if deleted == 1 {
+		if _, err := tx.Exec(`
+		UPDATE posts
+		SET likes = GREATEST(likes - 1, 0)
+		WHERE id = $1`, postID) err != nil { return nil, err}
+	}
+	var likes int 
+	if err := tx.QueryRow(`SELECT likes FROM posts WHERE id = $1`, postID).Scan(&likes)
+	err != nil {
+		return nil, err
+	}
+	if err := tx.Commit() err != nil { return nil, err	}
+
+	return &models.PostLikeResult{
+		Liked: false,
+		Likes: likes
+	}, nil
 }
 
 type PostgresChatRepository struct {

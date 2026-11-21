@@ -11,10 +11,11 @@ import {
   MAX_PHOTOS,
   rejectPhotoFile,
   toMediaPayload,
-  uploadPostPhoto,
+  uploadPostPhoto
 } from "@/lib/postPhotos";
 import type { CurrentUser } from "@/lib/user";
 import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
+import { setPostLike } from "@/lib/postLikes";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const CHAR_LIMIT = 280;
@@ -41,6 +42,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
   const [draftPhotos, setDraftPhotos] = useState<DraftPhoto[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewUrlsRef = useRef<string[]>([]);
+  const [pendingLikePostIds, setPendingLikePostIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     previewUrlsRef.current = draftPhotos.map((photo) => photo.previewUrl);
@@ -88,6 +90,8 @@ export default function DashboardView({ user }: DashboardViewProps) {
 
     router.replace("/login");
   };
+
+  
 
   const uploadDraftPhoto = async (key: string, file: File) => {
     const result = await uploadPostPhoto(file);

@@ -72,6 +72,7 @@ func SetupRouter(
 	mux.HandleFunc("/api/posts", postController.CreatePostHandler)
 	mux.HandleFunc("/api/posts/feed", postController.FeedHandler)
 	mux.HandleFunc("/api/posts/user", postController.UserPostsHandler)
+    mux.HandleFunc("/api/posts/{id}/like", postController.PostLikeHandler)
 	mux.HandleFunc("/api/posts/{id}", postController.PostByIDHandler)
 	mux.HandleFunc("/api/posts/{id}/comments", commentController.PostCommentsHandler)
 	mux.HandleFunc("/api/comments/{id}", commentController.DeleteCommentHandler)

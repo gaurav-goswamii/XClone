@@ -1,13 +1,14 @@
 package controllers
 
 import (
+	"backend/models"
+	"backend/service"
+	"backend/utils"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
-	"backend/service"
-	"backend/utils"
 )
 
 type PostController struct {
@@ -149,7 +150,9 @@ func (c *PostController) FeedHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	posts, err := c.postService.GetFeed(limit, offset)
+	viewerID := c.optionalViewerID(w, r)
+
+	posts, err := c.postService.GetFeed(limit, offset, viewerID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch feed")
 		return
@@ -218,7 +221,7 @@ func (c *PostController) PostByIDHandler(w http.ResponseWriter, r *http.Request)
 
 	switch r.Method {
 	case http.MethodGet:
-		c.getPost(w, postID)
+		c.getPost(w, r, postID)
 	case http.MethodPut:
 		c.updatePost(w, r, postID)
 	case http.MethodDelete:
@@ -228,8 +231,10 @@ func (c *PostController) PostByIDHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (c *PostController) getPost(w http.ResponseWriter, postID string) {
-	post, err := c.postService.GetPost(postID)
+func (c *PostController) getPost(w http.ResponseWriter, r *http.Request, postID string) {
+	viewerID := c.optionalViewerID(w, r)
+	
+	post, err := c.postService.GetPost(postID, viewerID)
 	if err != nil {
 		writePostError(w, err, "failed to fetch post")
 		return
@@ -299,5 +304,59 @@ func (c *PostController) deletePost(w http.ResponseWriter, r *http.Request, post
 		Data: map[string]interface{}{
 			"id": postID,
 		},
+	})
+}
+
+func (c *PostController) optionalViewerID(w http.ResponseWriter, r *http.Request) string {
+	cookie, err := r.Cookie(AuthCookieName)
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+
+	claims, err := utils.ValidateJWT(cookie.Value, c.jwtSecret)
+	if err != nil {
+		clearAuthCookie(w)
+		return ""
+	}
+	return strings.TrimSpace(claims.UserID)
+}
+
+func (c *PostController) PostLikeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodDelete {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	claims, ok := c.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	postID := strings.TrimSpace(r.PathValue("id"))
+	if postID == "" {
+		writeError(w, http.StatusBadRequest, "post id is required")
+		return
+	}
+
+	var ( result *models.PostLikeResult err error )
+
+	if r.Method == http.MethodPut {
+		result, err = c.postService.LikePost(claims.UserID, postID)
+	} else {
+		result, err = c.postService.UnlikePost(claims.UserID, postID)
+	}
+
+	if err != nil {
+		writePostError(w, err, "failed to update post like")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Status: "success",
+		Message: "post like updated successfully",
+		Data: map[string]interface{}{
+			"liked": result.Liked,
+			"likes": result.Likes
+		}
 	})
 }
