@@ -19,12 +19,12 @@ var (
 	ErrContentTooLong   = errors.New("post content exceeds 280 characters")
 	ErrUnauthorizedPost = errors.New("unauthorized user")
 	ErrNotPostOwner     = errors.New("you can only modify your own posts")
-	ErrPostNotFound = repository.ErrPostNotFound
+	ErrPostNotFound     = repository.ErrPostNotFound
 )
 
 type PostService struct {
-	postRepo repository.PostRepository
-	media mediaResolver
+	postRepo     repository.PostRepository
+	media        mediaResolver
 	photoDeleter PhotoDeleter
 }
 
@@ -32,10 +32,10 @@ type PhotoDeleter interface {
 	DeletePhoto(ctx context.Context, publicID string) error
 }
 
-func NewPostService(postRepo repository.PostRepository, cloudName, uploadFolder string, photoDeleter PhotoDeleter,) *PostService {
+func NewPostService(postRepo repository.PostRepository, cloudName, uploadFolder string, photoDeleter PhotoDeleter) *PostService {
 	return &PostService{
-		postRepo: postRepo,
-		media:    mediaResolver{cloudName: cloudName, uploadFolder: uploadFolder},
+		postRepo:     postRepo,
+		media:        mediaResolver{cloudName: cloudName, uploadFolder: uploadFolder},
 		photoDeleter: photoDeleter,
 	}
 }
@@ -86,7 +86,7 @@ func (s *PostService) CreatePost(userID, content string, refs []MediaRef) (*mode
 		return nil, err
 	}
 
-	return s.postRepo.GetByID(postID)
+	return s.postRepo.GetByID(postID, "")
 }
 
 func (s *PostService) GetFeed(limit, offset int, viewerID string) ([]*models.PostResponse, error) {
@@ -100,12 +100,12 @@ func (s *PostService) GetUserPosts(username string, limit, offset int,
 		return []*models.PostResponse{}, nil
 	}
 	return s.postRepo.ListByUser(cleanUsername, limit, offset,
-	strings.TrimSpace(viewerID))
+		strings.TrimSpace(viewerID))
 }
 
 func (s *PostService) GetPost(postID string,
 	viewerID string) (*models.PostResponse, error) {
-	postID := strings.TrimSpace(postID)
+	postID = strings.TrimSpace(postID)
 	if postID == "" {
 		return nil, ErrPostNotFound
 	}
@@ -131,7 +131,7 @@ func (s *PostService) UpdatePost(
 		return nil, err
 	}
 
-	existing, err := s.postRepo.GetByID(trimmedPostID)
+	existing, err := s.postRepo.GetByID(trimmedPostID, "")
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (s *PostService) UpdatePost(
 
 	s.releasePhotos(context.Background(), dropped)
 
-	return s.postRepo.GetByID(trimmedPostID)
+	return s.postRepo.GetByID(trimmedPostID, "")
 }
 
 func droppedPublicIDs(before, after []models.PostMedia) []string {
@@ -218,7 +218,7 @@ func (s *PostService) DeletePost(userID, postID string) error {
 		return ErrPostNotFound
 	}
 
-	existing, err := s.postRepo.GetByID(trimmedPostID)
+	existing, err := s.postRepo.GetByID(trimmedPostID, "")
 	if err != nil {
 		return err
 	}
@@ -269,4 +269,3 @@ func (s *PostService) UnlikePost(userID, postID string) (*models.PostLikeResult,
 	}
 	return s.postRepo.UnlikePost(postID, userID)
 }
-

@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 	_ "github.com/lib/pq"
+	"time"
 )
 
 func ConnectPostgres(databaseURL string) (*sql.DB, error) {
@@ -79,17 +79,14 @@ func Migrate(db *sql.DB) error {
 	);
 
 	CREATE TABLE IF NOT EXISTS post_likes (
-    post_id VARCHAR(64) NOT NULL
-	REFERENCES posts(id) ON DELETE CASCADE,
-	user_id VARCHAR(64) NOT NULL
-	REFERENCES user(id) ON DELETE CASCADE,
-	created_at TIMESTAMP WITH TIME ZONE
-	DEFAULT CURRENT_TIMESTAMP,
-	PRIMARY KEY (post_id, user_id)
-	)
+		post_id VARCHAR(64) NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+		user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (post_id, user_id)
+	);
 
 	CREATE INDEX IF NOT EXISTS idx_post_likes_user_id
-	ON post_likes (user_id)
+		ON post_likes (user_id);
 
 		CREATE TABLE IF NOT EXISTS chat (
 		id VARCHAR(64) PRIMARY KEY,

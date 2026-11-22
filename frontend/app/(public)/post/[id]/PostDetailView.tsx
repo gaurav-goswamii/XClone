@@ -10,6 +10,7 @@ import CommentCard, {
   type CommentResponse,
 } from "@/components/comment/CommentCard"
 import CommentComposer from "@/components/comment/CommentComposer";
+import { setPostLike } from "@/lib/postLikes";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -31,6 +32,7 @@ export default function PostDetailView({
   const [notFound, setNotFound] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
+  const [isLikePending, setIsLikePending] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -91,6 +93,42 @@ useEffect(() => {
     isCancelled = true;
   };
 }, [postId]);
+
+
+const handleLike = async (postId: string, nextLiked: boolean) => {
+  if (!currentUser) {
+    router.push("/login")
+    return
+  }
+
+  if (!post || post.id !== postId) return
+
+  const previousPost = post
+  setIsLikePending(true)
+
+  setPost({
+    ...post,
+    liked_by_viewer: nextLiked,
+    likes: Math.max(
+      0,
+      post.likes + (nextLiked ? 1 : -1)
+    )
+  })
+
+  try {const result = await setPostLike(postId, nextLiked)
+
+    setPost((current) => current ? {
+      ...current,
+      liked_by_viewer: result.liked,
+      likes: result.likes
+    } : current)
+  } catch {
+    setPost(previousPost)
+    setActionError("Could not update the like. please try again.")
+  } finally {
+    setIsLikePending(false)
+  }
+}
 
   
 
@@ -203,6 +241,8 @@ const handleCommentDelete = async (commentId: string) => {
             <PostCard
               post={post}
               isOwner={isOwner}
+              isLikePending={isLikePending}
+              onLike={handleLike}
               onEdit={() => setIsEditOpen(true)}
               onDelete={handleDelete}
             />

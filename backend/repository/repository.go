@@ -24,10 +24,11 @@ type UserRepository interface {
 type PostRepository interface {
 	Create(post *models.Post, media []models.PostMedia) error
 
-	GetByID(id string) (*models.PostResponse, error)
-	ListFeed(limit, offset int) ([]*models.PostResponse, error)
+	GetByID(id, viewerID string) (*models.PostResponse, error)
+	ListFeed(limit, offset int, viewerID string) ([]*models.PostResponse, error)
 	ListByUser(username string, limit, offset int, viewerID string) ([]*models.PostResponse, error)
-	
+	PostExists(postID string) (bool, error)
+
 	LikePost(postID, userID string) (*models.PostLikeResult, error)
 	UnlikePost(postID, userID string) (*models.PostLikeResult, error)
 

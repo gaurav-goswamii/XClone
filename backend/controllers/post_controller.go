@@ -193,7 +193,8 @@ func (c *PostController) UserPostsHandler(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	posts, err := c.postService.GetUserPosts(username, limit, offset)
+	viewerID := c.optionalViewerID(w, r)
+	posts, err := c.postService.GetUserPosts(username, limit, offset, viewerID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch user posts")
 		return
@@ -233,7 +234,7 @@ func (c *PostController) PostByIDHandler(w http.ResponseWriter, r *http.Request)
 
 func (c *PostController) getPost(w http.ResponseWriter, r *http.Request, postID string) {
 	viewerID := c.optionalViewerID(w, r)
-	
+
 	post, err := c.postService.GetPost(postID, viewerID)
 	if err != nil {
 		writePostError(w, err, "failed to fetch post")
@@ -338,7 +339,10 @@ func (c *PostController) PostLikeHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var ( result *models.PostLikeResult err error )
+	var (
+		result *models.PostLikeResult
+		err    error
+	)
 
 	if r.Method == http.MethodPut {
 		result, err = c.postService.LikePost(claims.UserID, postID)
@@ -352,11 +356,11 @@ func (c *PostController) PostLikeHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusOK, APIResponse{
-		Status: "success",
+		Status:  "success",
 		Message: "post like updated successfully",
 		Data: map[string]interface{}{
 			"liked": result.Liked,
-			"likes": result.Likes
-		}
+			"likes": result.Likes,
+		},
 	})
 }

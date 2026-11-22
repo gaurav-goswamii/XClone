@@ -4,14 +4,14 @@ import (
 	"backend/models"
 	"database/sql"
 	"errors"
+	"github.com/lib/pq"
 	"strings"
 	"time"
-	"github.com/lib/pq"
 )
 
 type PostgresUserRepository struct {
 	db *sql.DB
-}	
+}
 
 func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
 	return &PostgresUserRepository{db: db}
@@ -313,7 +313,7 @@ func (r *PostgresPostRepository) GetByID(id string,
 	`
 	var post models.PostResponse
 	err := r.db.QueryRow(query, strings.TrimSpace(id),
-	strings.TrimSpace(viewerID)).Scan(
+		strings.TrimSpace(viewerID)).Scan(
 		&post.ID,
 		&post.UserID,
 		&post.AuthorName,
@@ -338,6 +338,15 @@ func (r *PostgresPostRepository) GetByID(id string,
 		return nil, err
 	}
 	return &post, nil
+}
+
+func (r *PostgresPostRepository) PostExists(postID string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`,
+		strings.TrimSpace(postID),
+	).Scan(&exists)
+	return exists, err
 }
 
 func (r *PostgresPostRepository) ListFeed(limit, offset int,
@@ -365,7 +374,7 @@ func (r *PostgresPostRepository) ListFeed(limit, offset int,
 		LIMIT $1 OFFSET $2
 	`
 	rows, err := r.db.Query(query, limit, offset,
-	strings.TrimSpace(viewerID))
+		strings.TrimSpace(viewerID))
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +437,13 @@ func (r *PostgresPostRepository) ListByUser(username string, limit, offset int,
 		ORDER BY p.created_at DESC
 		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.Query(query, strings.TrimSpace(viewerID), limit, offset)
+	rows, err := r.db.Query(
+		query,
+		strings.TrimSpace(username),
+		limit,
+		offset,
+		strings.TrimSpace(viewerID),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -536,15 +551,15 @@ func (r *PostgresPostRepository) Update(
 	return tx.Commit()
 }
 
-func (r *PostgresPostRepository) GetMediaByPostID(postID string,)([]models.PostMedia, error){
+func (r *PostgresPostRepository) GetMediaByPostID(postID string) ([]models.PostMedia, error) {
 	query := `SELECT ordinal, url, public_id, media_type, width, height
 		FROM post_media
 		WHERE post_id = $1
 		ORDER BY ordinal`
 	rows, err := r.db.Query(query, strings.TrimSpace(postID))
-	if err!= nil {
+	if err != nil {
 		return nil, err
-	}	
+	}
 	defer rows.Close()
 	var media []models.PostMedia
 
@@ -554,19 +569,19 @@ func (r *PostgresPostRepository) GetMediaByPostID(postID string,)([]models.PostM
 		if err := rows.Scan(
 			&item.Ordinal,
 			&item.URL,
-		&item.PublicID,
-		&item.MediaType,
-		&item.Width,
-		&item.Height,
+			&item.PublicID,
+			&item.MediaType,
+			&item.Width,
+			&item.Height,
 		); err != nil {
 			return nil, err
 		}
 		media = append(media, item)
 	}
-	 if err := rows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
-	 }
-	 return media, nil
+	}
+	return media, nil
 }
 
 func (r *PostgresPostRepository) Delete(id, userID string) error {
@@ -591,7 +606,7 @@ func (r *PostgresPostRepository) Delete(id, userID string) error {
 func (r *PostgresPostRepository) LikePost(postID, userID string) (*models.PostLikeResult, error) {
 	postID = strings.TrimSpace(postID)
 	userID = strings.TrimSpace(userID)
-    
+
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
@@ -601,52 +616,53 @@ func (r *PostgresPostRepository) LikePost(postID, userID string) (*models.PostLi
 	}()
 
 	var exists bool
-	err = tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`, postID).Scan(
-		&exists)
-		if err != nil {
-			return nil, err
-		}
-		if !exists {
-			return nil, ErrPostNotFound
-		}
+	err = tx.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`,
+		postID,
+	).Scan(&exists)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrPostNotFound
+	}
 
-		result, err := tx.Exec(`INSERT INTO post_likes (post_id, user_id)
+	result, err := tx.Exec(`INSERT INTO post_likes (post_id, user_id)
 		VALUES ($1, $2)
 		ON CONFLICT (post_id, user_id) DO NOTHING`, postID, userID)
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
+	}
 
-		inserted, err := result.RowsAffected()
-		if err != nil {
-			return nil, err
-		}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
 
-		if inserted == 1 {
-			if _, err := tx.Exec(`
+	if inserted == 1 {
+		if _, err := tx.Exec(`
 			UPDATE posts
 			SET likes = likes + 1
-			WHERE id = $1`, postID)
-			err != nil {
-				return nil, err
-			}
-		}
-
-		var likes int
-		if err := tx.QueryRow(
-			`SELECT likes FROM posts WHERE id = $1`, postID
-		).Scan(&likes) err != nil {
+			WHERE id = $1`, postID); err != nil {
 			return nil, err
 		}
+	}
 
-		if err := tx.Commit() err != nil {
-			return nil, err
-		}
+	var likes int
+	if err := tx.QueryRow(
+		`SELECT likes FROM posts WHERE id = $1`, postID,
+	).Scan(&likes); err != nil {
+		return nil, err
+	}
 
-		return &models.PostLikeResult{
-			Liked: true,
-			Likes: likes,
-		}, nil
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &models.PostLikeResult{
+		Liked: true,
+		Likes: likes,
+	}, nil
 }
 
 func (r *PostgresPostRepository) UnlikePost(postID, userID string) (*models.PostLikeResult, error) {
@@ -663,33 +679,47 @@ func (r *PostgresPostRepository) UnlikePost(postID, userID string) (*models.Post
 
 	var exists bool
 	err = tx.QueryRow(
-		`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`, postID
-	).Scan(&exists) if err != nil { return nil, err}
-	if !exists { return nil, ErrPostNotFound}
+		`SELECT EXISTS (SELECT 1 FROM posts WHERE id = $1)`, postID,
+	).Scan(&exists)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrPostNotFound
+	}
 
 	result, err := tx.Exec(`DELETE FROM post_likes
 	WHERE post_id = $1 AND user_id = $2`, postID, userID)
-	if err != nil { return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	deleted, err := result.RowsAffected()
-	if err != nil { return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	if deleted == 1 {
 		if _, err := tx.Exec(`
 		UPDATE posts
 		SET likes = GREATEST(likes - 1, 0)
-		WHERE id = $1`, postID) err != nil { return nil, err}
+		WHERE id = $1`, postID); err != nil {
+			return nil, err
+		}
 	}
-	var likes int 
-	if err := tx.QueryRow(`SELECT likes FROM posts WHERE id = $1`, postID).Scan(&likes)
-	err != nil {
+	var likes int
+	if err := tx.QueryRow(
+		`SELECT likes FROM posts WHERE id = $1`, postID,
+	).Scan(&likes); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit() err != nil { return nil, err	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 
 	return &models.PostLikeResult{
 		Liked: false,
-		Likes: likes
+		Likes: likes,
 	}, nil
 }
 
@@ -717,11 +747,11 @@ func (r *PostgresChatRepository) Create(chat *models.Chat) error {
 func (r *PostgresChatRepository) GetByUsers(
 	user1ID string,
 	user2ID string,
-)(*models.Chat, error){
+) (*models.Chat, error) {
 
-	user1ID, user2ID =canonicalPair(user1ID, user2ID)
-	 
-	query:=`
+	user1ID, user2ID = canonicalPair(user1ID, user2ID)
+
+	query := `
 	SELECT id, user1_id, user2_id, created_at
 	FROM chat
 	WHERE user1_id = $1
@@ -749,31 +779,31 @@ func (r *PostgresChatRepository) GetByUsers(
 	return &chat, nil
 }
 
-func(r* PostgresChatRepository) GetByID(
+func (r *PostgresChatRepository) GetByID(
 	id string,
-)(*models.Chat, error){
-	query:=`
+) (*models.Chat, error) {
+	query := `
 	SELECT id, user1_id, user2_id, created_at
         FROM chat
         WHERE id = $1 `
 
-		var chat models.Chat
+	var chat models.Chat
 
-		err := r.db.QueryRow(query, id).Scan(
-			&chat.ID,
-			&chat.User1ID,
-			&chat.User2ID,
-			&chat.CreatedAt,
-		)
+	err := r.db.QueryRow(query, id).Scan(
+		&chat.ID,
+		&chat.User1ID,
+		&chat.User2ID,
+		&chat.CreatedAt,
+	)
 
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, ErrChatNotFound
-			}
-			return nil, err
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrChatNotFound
 		}
-		return &chat, nil
+		return nil, err
 	}
+	return &chat, nil
+}
 
 type PostgresMessageRepository struct {
 	db *sql.DB
@@ -785,19 +815,19 @@ func NewPostgresMessageRepository(db *sql.DB) *PostgresMessageRepository {
 
 func (r *PostgresMessageRepository) Create(message *models.Message) error {
 
- query:=`INSERT INTO message (id, chat_id, sender_id, content)
+	query := `INSERT INTO message (id, chat_id, sender_id, content)
  VALUES($1, $2, $3, $4)
  RETURNING seq, created_at`
 
- 	err := r.db.QueryRow(
-    query,
-    message.ID,
-    message.ChatID,
-    message.SenderID,
-    message.Content,
-).Scan(&message.Seq, &message.CreatedAt)
+	err := r.db.QueryRow(
+		query,
+		message.ID,
+		message.ChatID,
+		message.SenderID,
+		message.Content,
+	).Scan(&message.Seq, &message.CreatedAt)
 
-return err
+	return err
 }
 
 func (r *PostgresMessageRepository) ListByChat(chatID string) ([]models.Message, error) {
@@ -807,40 +837,40 @@ func (r *PostgresMessageRepository) ListByChat(chatID string) ([]models.Message,
         WHERE chat_id = $1
         ORDER BY seq ASC`
 
-		rows, err := r.db.Query(query, chatID)
+	rows, err := r.db.Query(query, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	messages := []models.Message{}
+
+	for rows.Next() {
+		var message models.Message
+
+		err := rows.Scan(
+			&message.ID,
+			&message.ChatID,
+			&message.SenderID,
+			&message.Content,
+			&message.Seq,
+			&message.CreatedAt,
+		)
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
+		messages = append(messages, message)
+	}
 
-		messages := []models.Message{}
-
-		for rows.Next() {
-			var message models.Message
-
-			err := rows.Scan(
-				&message.ID,
-				&message.ChatID,
-				&message.SenderID,
-				&message.Content,
-				&message.Seq,
-				&message.CreatedAt,
-			)
-			if err != nil {
-				return nil, err
-			}
-			messages = append(messages, message)
-		}
-
-		if err:= rows.Err(); err != nil {
-			return nil, err
-		}
-		return messages, nil
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return messages, nil
 }
 
 func canonicalPair(a, b string) (string, string) {
-    if a < b {
-        return a, b
-    }
-    return b, a
+	if a < b {
+		return a, b
+	}
+	return b, a
 }

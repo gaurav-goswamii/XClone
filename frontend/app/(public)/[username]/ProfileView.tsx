@@ -10,6 +10,7 @@ import PostCard, { PostResponse } from "@/components/post/PostCard";
 import EditPostModal from "@/components/post/EditPostModal";
 import type { CurrentUser } from "@/lib/user";
 import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
+import { setPostLike } from "@/lib/postLikes";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -156,6 +157,54 @@ export default function ProfileView({
       (currentUser.id === profileUser.id ||
         currentUser.username.toLowerCase() === profileUser.username.toLowerCase())
   );
+
+  const [pendingLikePostIds, setPendingLikePostIds] = 
+  useState<Set<string>>(new Set())
+
+  const handleLike = async (postId: string, nextLiked: boolean) => {
+    if (!currentUser) {
+      router.push("/login")
+      return
+    }
+
+    const previousPost = userPosts.find((post) => post.id === postId)
+    if (!previousPost) return
+
+    setPendingLikePostIds((current) => {
+      const next = new Set(current)
+      next.add(postId)
+      return next
+    })
+
+    setUserPosts((current) => current.map((post) => post.id === postId ? {
+      ...post,
+      liked_by_viewer: nextLiked,
+      likes: Math.max(
+        0, post.likes + (nextLiked ? 1 : -1)
+      )
+    }: post))
+
+    try{
+      const result = await setPostLike(postId, nextLiked)
+
+      setUserPosts((current) => current.map((post) => post.id === postId? {
+        ...post,
+        liked_by_viewer: result.liked,
+        likes: result.likes
+      } : post))
+    } catch {
+      setUserPosts((current) => current.map((post) =>
+      post.id === postId ? previousPost: post))
+
+      setPostsError("Could not update the like , please try again")
+    } finally {
+      setPendingLikePostIds((current) => {
+        const next = new Set(current)
+        next.delete(postId)
+        return next
+      })
+    }
+  }
 
   return (
     <div className="min-h-screen bg-black text-[#e7e9ea] flex justify-center selection:bg-[#1d9bf0]/30 selection:text-white">
@@ -384,6 +433,8 @@ export default function ProfileView({
                         key={post.id}
                         post={post}
                         isOwner={post.user_id === currentUser?.id}
+                        isLikePending={pendingLikePostIds.has(post.id)}
+                        onLike={handleLike}
                         onEdit={setEditingPost}
                         onDelete={handleDeletePost}
                       />

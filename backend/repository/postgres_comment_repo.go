@@ -16,47 +16,46 @@ func NewPostgresCommentRepository(db *sql.DB) *PostgresCommentRepository {
 }
 
 func (r *PostgresCommentRepository) Create(comment *models.Comment) (*models.CommentResponse, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
 
-	 tx, err := r.db.Begin()
-    if err != nil {
-        return nil, err
-    }
-    defer func() { _ = tx.Rollback() }()
+	_, err = tx.Exec(`
+		INSERT INTO comments (id, post_id, user_id, content)
+		VALUES ($1, $2, $3, $4)
+	`, comment.ID, comment.PostID, comment.UserID, comment.Content)
+	if err != nil {
+		return nil, err
+	}
 
-    insertQuery := `
-        INSERT INTO comments (id, post_id, user_id, content)
-        VALUES ($1, $2, $3, $4)
-    `
-if _, err := tx.Exec(
-        insertQuery,
-        comment.ID,
-        comment.PostID,
-        comment.UserID,
-        comment.Content,
-    ); err != nil {
-        return nil, err
-    }
+	result, err := tx.Exec(
+		`UPDATE posts SET replies = replies + 1 WHERE id = $1`,
+		comment.PostID,
+	)
+	if err != nil {
+		return nil, err
+	}
 
-    result, err := tx.Exec(
-        `UPDATE posts SET replies = replies + 1 WHERE id = $1`,
-        comment.PostID,
-    )
-    if err != nil {
-        return nil, err
-    }
-    rowsAffected, err := result.RowsAffected()
-    if err != nil {
-        return nil, err
-    }
-    if rowsAffected == 0 {
-        return nil, ErrPostNotFound
-    }
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rowsAffected != 1 {
+		return nil, ErrPostNotFound
+	}
 
-    if err := tx.Commit(); err != nil {
-        return nil, err
-    }
+	response, err := r.getResponseByIDTx(tx, comment.ID)
+	if err != nil {
+		return nil, err
+	}
 
-    return r.getResponseByID(comment.ID)
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 func (r *PostgresCommentRepository) ListByPost(postID string, limit, offset int) ([]*models.CommentResponse, error) {
@@ -73,7 +72,7 @@ func (r *PostgresCommentRepository) ListByPost(postID string, limit, offset int)
 		FROM comments c
 		JOIN users u ON c.user_id = u.id
 		WHERE c.post_id = $1
-		ORDER BY c.created_at ASC
+		ORDER BY c.created_at ASC, c.id ASC
 		LIMIT $2 OFFSET $3
 	`
 	rows, err := r.db.Query(query, strings.TrimSpace(postID), limit, offset)
@@ -152,26 +151,31 @@ func (r *PostgresCommentRepository) Delete(id, postID, userID string) error {
 		return ErrCommentNotFound
 	}
 
-	if _, err := tx.Exec(
+	result, err = tx.Exec(
 		`UPDATE posts SET replies = GREATEST(replies - 1, 0) WHERE id = $1`,
 		strings.TrimSpace(postID),
-	); err != nil {
+	)
+	if err != nil {
 		return err
+	}
+	rowsAffected, err = result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected != 1 {
+		return ErrPostNotFound
 	}
 
 	return tx.Commit()
 }
 
-func (r *PostgresCommentRepository) getResponseByID(id string) (*models.CommentResponse, error) {
-	query := `
-		SELECT c.id, c.post_id, c.user_id, u.name, u.username,
-		       COALESCE(u.avatar_url, ''), c.content, c.created_at
-		FROM comments c
-		JOIN users u ON c.user_id = u.id
-		WHERE c.id = $1
-	`
+type commentRowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanCommentResponse(row commentRowScanner) (*models.CommentResponse, error) {
 	var comment models.CommentResponse
-	err := r.db.QueryRow(query, strings.TrimSpace(id)).Scan(
+	err := row.Scan(
 		&comment.ID,
 		&comment.PostID,
 		&comment.UserID,
@@ -188,4 +192,23 @@ func (r *PostgresCommentRepository) getResponseByID(id string) (*models.CommentR
 		return nil, err
 	}
 	return &comment, nil
+}
+
+const commentResponseQuery = `
+	SELECT c.id, c.post_id, c.user_id, u.name, u.username,
+	       COALESCE(u.avatar_url, ''), c.content, c.created_at
+	FROM comments c
+	JOIN users u ON c.user_id = u.id
+	WHERE c.id = $1
+`
+
+func (r *PostgresCommentRepository) getResponseByIDTx(
+	tx *sql.Tx,
+	id string,
+) (*models.CommentResponse, error) {
+	return scanCommentResponse(tx.QueryRow(commentResponseQuery, strings.TrimSpace(id)))
+}
+
+func (r *PostgresCommentRepository) getResponseByID(id string) (*models.CommentResponse, error) {
+	return scanCommentResponse(r.db.QueryRow(commentResponseQuery, strings.TrimSpace(id)))
 }

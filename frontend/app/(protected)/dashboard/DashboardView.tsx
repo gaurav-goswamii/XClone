@@ -91,7 +91,44 @@ export default function DashboardView({ user }: DashboardViewProps) {
     router.replace("/login");
   };
 
-  
+  const handleLike = async (postId: string, nextLiked: boolean) => {
+    const previousPost = feedPosts.find((post) => post.id === postId)
+    if (!previousPost) return
+
+    setPendingLikePostIds((current) => {
+      const next = new Set(current)
+      next.add(postId)
+      return next
+    })
+
+    setFeedPosts((current) => current.map((post) => post.id === postId ? {
+      ...post,
+      liked_by_viewer: nextLiked,
+      likes: Math.max(
+        0,
+        post.likes + (nextLiked ? 1 : -1)
+      )
+    } : post))
+
+    try {const result = await setPostLike(postId, nextLiked)
+
+      setFeedPosts((current) => current.map((post) => post.id === postId ? {
+        ...post,
+        liked_by_viewer: result.liked,
+        likes: result.likes
+      } : post))
+    } catch {
+      setFeedPosts((current) => current.map((post) => 
+      post.id === postId ? previousPost : post))
+      setFeedError("Could not update the lke. Please try again")
+    } finally {
+      setPendingLikePostIds((current) => {
+        const next = new Set(current)
+        next.delete(postId)
+        return next
+      })
+    }
+  }
 
   const uploadDraftPhoto = async (key: string, file: File) => {
     const result = await uploadPostPhoto(file);
@@ -486,6 +523,8 @@ export default function DashboardView({ user }: DashboardViewProps) {
                   key={post.id}
                   post={post}
                   isOwner={post.user_id === user.id}
+                  isLikePending={pendingLikePostIds.has(post.id)}
+                  onLike={handleLike}
                   onEdit={setEditingPost}
                   onDelete={handleDeletePost}
                 />

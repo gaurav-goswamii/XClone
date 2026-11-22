@@ -47,39 +47,73 @@ func (s *CommentService) CreateComment(
 	if utf8.RuneCountInString(comment.Content) > MaxCommentRunes {
 		return nil, ErrCommentTooLong
 	}
-	if strings.TrimSpace(comment.UserID) == "" {
-		return nil, ErrUnauthorized
+
+	comment.UserID = strings.TrimSpace(comment.UserID)
+	if comment.UserID == "" {
+		return nil, ErrUnauthorizedUser
 	}
-	if _, err := s.postRepo.GetByID(comment.PostID); err != nil {
+
+	comment.PostID = strings.TrimSpace(comment.PostID)
+	if comment.PostID == "" {
+		return nil, ErrPostNotFound
+	}
+
+	exists, err := s.postRepo.PostExists(comment.PostID)
+	if err != nil {
 		return nil, err
 	}
-	return s.commentRepo.Create(comment)
+	if !exists {
+		return nil, ErrPostNotFound
+	}
+
+	created, err := s.commentRepo.Create(comment)
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
 }
 
 func (s *CommentService) GetComments(
 	postID string,
 	limit, offset int,
 ) ([]*models.CommentResponse, error) {
-	if strings.TrimSpace(postID) == "" {
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
 		return nil, ErrPostNotFound
 	}
-	if _, err := s.postRepo.GetByID(postID); err != nil {
+
+	exists, err := s.postRepo.PostExists(postID)
+	if err != nil {
 		return nil, err
 	}
-	return s.commentRepo.ListByPost(postID, limit, offset)
+	if !exists {
+		return nil, ErrPostNotFound
+	}
+
+	comments, err := s.commentRepo.ListByPost(postID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return comments, nil
 }
 
 func (s *CommentService) DeleteComment(
 	commentID, userID string,
 ) error {
-	if strings.TrimSpace(userID) == "" {
+	commentID = strings.TrimSpace(commentID)
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
 		return ErrUnauthorizedUser
 	}
+	if commentID == "" {
+		return ErrCommentNotFound
+	}
+
 	comment, err := s.commentRepo.GetByID(commentID)
 	if err != nil {
 		return err
 	}
-	if comment.UserID != userID {
+	if strings.TrimSpace(comment.UserID) != userID {
 		return ErrNotCommentOwner
 	}
 	return s.commentRepo.Delete(comment.ID, comment.PostID, userID)

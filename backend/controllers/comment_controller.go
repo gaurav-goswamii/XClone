@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,8 +58,6 @@ func writeCommentError(w http.ResponseWriter, err error, fallback string) {
 		writeError(w, http.StatusForbidden, "you can only delete your own comments")
 	case errors.Is(err, service.ErrUnauthorizedUser):
 		writeError(w, http.StatusUnauthorized, "unauthorized user")
-	case errors.Is(err, service.ErrUnauthorized):
-		writeError(w, http.StatusUnauthorized, "unauthorized")
 	case errors.Is(err, service.ErrEmptyComment):
 		writeError(w, http.StatusBadRequest, "comment cannot be empty")
 	case errors.Is(err, service.ErrCommentTooLong):
@@ -98,13 +97,20 @@ func (c *CommentController) CreateCommentHandler(w http.ResponseWriter, r *http.
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxCommentBodyBytes)
 
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
 	var req CreateCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decoder.Decode(&req); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			writeError(w, http.StatusRequestEntityTooLarge, "request body is too large")
 			return
 		}
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
