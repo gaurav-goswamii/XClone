@@ -15,21 +15,29 @@ var (
 	ErrCannotMessageSelf = errors.New("you cannot message yourself")
 )
 
+type MessagePublisher interface {
+	Publish(message models.Message)
+}
+
 type ChatService struct {
 	chatRepo    repository.ChatRepository
 	messageRepo repository.MessageRepository
 	userRepo    repository.UserRepository
+	publisher   MessagePublisher
 }
+
 
 func NewChatService(
 	chatRepo repository.ChatRepository,
 	messageRepo repository.MessageRepository,
 	userRepo repository.UserRepository,
+	publisher MessagePublisher,
 ) *ChatService {
 	return &ChatService{
 		chatRepo:    chatRepo,
 		messageRepo: messageRepo,
 		userRepo:    userRepo,
+		publisher: publisher,
 	}
 }
 

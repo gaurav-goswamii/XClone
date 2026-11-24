@@ -1,12 +1,13 @@
 package routes
 
 import (
+	"net/http"
 	"backend/config"
 	"backend/controllers"
 	"backend/middleware"
+	"backend/realtime"
 	"backend/repository"
 	"backend/service"
-	"net/http"
 )
 
 func SetupRouter(
@@ -34,7 +35,9 @@ func SetupRouter(
 		photoDeleter,
 	)
 
-	chatService := service.NewChatService(chatRepo, messageRepo, userRepo)
+	hub := realtime.NewHub()
+	chatService := service.NewChatService(chatRepo, messageRepo, userRepo, hub)
+
 	commentService := service.NewCommentService(commentRepo, postRepo)
 
 	authController := controllers.NewAuthController(
@@ -55,6 +58,7 @@ func SetupRouter(
 	chatController := controllers.NewChatController(
 		chatService,
 		cfg.JWTSecret,
+		hub,
 	)
 	commentController := controllers.NewCommentController(
 		commentService,
@@ -72,7 +76,7 @@ func SetupRouter(
 	mux.HandleFunc("/api/posts", postController.CreatePostHandler)
 	mux.HandleFunc("/api/posts/feed", postController.FeedHandler)
 	mux.HandleFunc("/api/posts/user", postController.UserPostsHandler)
-    mux.HandleFunc("/api/posts/{id}/like", postController.PostLikeHandler)
+	mux.HandleFunc("/api/posts/{id}/like", postController.PostLikeHandler)
 	mux.HandleFunc("/api/posts/{id}", postController.PostByIDHandler)
 	mux.HandleFunc("/api/posts/{id}/comments", commentController.PostCommentsHandler)
 	mux.HandleFunc("/api/comments/{id}", commentController.DeleteCommentHandler)

@@ -64,6 +64,10 @@ func (s *ChatService) SendMessage(
 		return nil, err
 	}
 
+	if s.publisher != nil {
+		s.publisher.Publish(*message)
+	}
+
 	return message, nil
 }
 

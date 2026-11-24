@@ -7,6 +7,9 @@ import (
 	"strings"
 	"backend/service"
 	"backend/utils"
+	"backend/realtime"
+	// "os"
+	// "github.com/gorilla/websocket"
 )
 
 const maxChatBodyBytes = 16 << 10
@@ -14,12 +17,14 @@ const maxChatBodyBytes = 16 << 10
 type ChatController struct {
 	chatService *service.ChatService
 	jwtSecret   string
+	hub *realtime.Hub
 }
 
-func NewChatController(chatService *service.ChatService, jwtSecret string) *ChatController {
+func NewChatController(chatService *service.ChatService, jwtSecret string, hub *realtime.Hub) *ChatController {
 	return &ChatController{
 		chatService: chatService,
 		jwtSecret:   jwtSecret,
+		hub: hub,
 	}
 }
 
