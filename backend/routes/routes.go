@@ -98,8 +98,9 @@ func SetupRouter(
 	mux.HandleFunc("/api/users/", authController.GetUserProfileHandler)
 
 	mux.HandleFunc("/api/chats", chatController.ChatsHandler)
-	mux.HandleFunc("/api/chats/{id}/messages", chatController.MessagesHandler)
-
+ 	mux.HandleFunc("/api/chats/{id}/messages", chatController.MessagesHandler)
+    mux.HandleFunc("/api/chats/{id}/ws", chatController.ChatWebSocketHandler)
+ 
 	handler := middleware.CORSMiddleware(mux)
 	handler = middleware.LoggerMiddleware(handler)
 

@@ -6,8 +6,8 @@ import UserAvatar from "@/components/ui/UserAvatar";
 import type { CurrentUser } from "@/lib/user";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-const POLL_INTERVAL_MS = 3000;
 const MESSAGE_LIMIT = 2000;
+
 
 interface Chat {
   id: string;
@@ -36,11 +36,38 @@ function formatTime(iso: string): string {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+function makeWebSocketURL(chatID: string): string {
+  const base = API_BASE || window.location.origin;
+  const url = new URL(base)
+
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+  url.pathname = `/api/chats/${encodeURIComponent(chatID)}/ws`
+  url.search = ""
+  url.hash = ""
+
+  return url.toString()
+}
+
+function mergeMessages(...groups: Message[][]): Message[] {
+  const byID = new Map<string, Message>()
+
+  for (const group of groups) {
+    for (const message of group) {
+      byID.set(message.id, message)
+    }
+  }
+
+  return [...byID.values()].sort((a, b) => a.seq - b.seq)
+}
+
 interface MessagesViewProps {
   user: CurrentUser;
 }
 
 export default function MessagesView({ user }: MessagesViewProps) {
+  const [isConnected, setIsConnected] = useState(false)
+const socketRef = useRef<WebSocket | null>(null)
+
   const [chat, setChat] = useState<Chat | null>(null);
   const [partnerUsername, setPartnerUsername] = useState<string>("");
 
@@ -114,43 +141,64 @@ export default function MessagesView({ user }: MessagesViewProps) {
     if (!chatID) return;
 
     let cancelled = false;
-    let inFlight = false;
+    const socket = new WebSocket(makeWebSocketURL(chatID))
+    socketRef.current = socket
 
-    const tick = async () => {
-      if (cancelled) return;
-      if (inFlight) return;
-      if (document.visibilityState !== "visible") return;
+    setIsLoadingMessages(true)
+    setMessagesError(null)
+    setIsConnected(false)
 
-      inFlight = true;
-      const fetched = await loadMessages(chatID);
-      inFlight = false;
+    void loadMessages(chatID).then((fetched) => {
+      if (cancelled) return
 
-      if (cancelled) return;
-
-      setIsLoadingMessages(false);
+      setIsLoadingMessages(false)
 
       if (fetched === null) {
-        setMessagesError("Could not load messages.");
-        return;
+        setMessagesError("Could not load messages.")
+        return
       }
 
-      setMessagesError(null);
-      setMessages((prev) => {
-        const prevLast = prev.length > 0 ? prev[prev.length - 1].seq : 0;
-        const nextLast = fetched.length > 0 ? fetched[fetched.length - 1].seq : 0;
-        if (prev.length === fetched.length && prevLast === nextLast) {
-          return prev;
-        }
-        return fetched;
-      });
-    };
+      setMessagesError(null)
+      setMessages((current) => mergeMessages(current, fetched))
+    })
 
-    const intervalID = setInterval(tick, POLL_INTERVAL_MS);
-    tick();
+    socket.onopen = () => {
+      if (cancelled || socketRef.current !== socket) return
+      setIsConnected(true)
+    }
+
+    socket.onmessage = (event) => {
+      if (cancelled || socketRef.current !== socket) return
+      if (typeof event.data !== "string") return
+
+      try {
+        const message = JSON.parse(event.data) as Message
+        if (!message.id || message.chat_id !== chatID) return
+
+        setMessages((current) => mergeMessages(current, [message]))
+      } catch {
+        setSendError("Could not read a message from the chat connection.")
+      }
+    }
+
+    socket.onerror = () => {
+      if (cancelled || socketRef.current !== socket) return
+      setIsConnected(false)
+      setSendError("Chat connection failed.")
+    }
+
+    socket.onclose = () => {
+      if (cancelled || socketRef.current !== socket) return
+      setIsConnected(false)
+      setSendError("Chat connection closed. Reopen the chat to reconnect.")
+    }
 
     return () => {
       cancelled = true;
-      clearInterval(intervalID);
+      if (socketRef.current === socket) {
+        socketRef.current = null
+      }
+      socket.close()
     };
   }, [chat?.id, loadMessages]);
 
@@ -164,31 +212,21 @@ export default function MessagesView({ user }: MessagesViewProps) {
     const content = draft.trim();
     if (!chat || !content || isSending) return;
 
+    const socket = socketRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setSendError("Chat is not connected. Reopen the chat and try again.")
+      return
+    }
+
     setIsSending(true);
     setSendError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/chats/${chat.id}/messages`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
-
-      if (!res.ok) {
-        setSendError(await errorFrom(res, "Could not send that message."));
-        return;
-      }
-
-      const data = await res.json();
-      const sent: Message = data.data.message;
-
-      setMessages((prev) =>
-        prev.some((message) => message.seq === sent.seq) ? prev : [...prev, sent]
-      );
+       
+      socket.send(JSON.stringify({ content }))
       setDraft("");
     } catch {
-      setSendError("Network error. Please try again.");
+      setSendError("Could not send the message. Please try again.");
     } finally {
       setIsSending(false);
     }
@@ -211,7 +249,13 @@ export default function MessagesView({ user }: MessagesViewProps) {
             <div>
               <h1 className="text-xl font-bold text-[#eff3f4]">Messages</h1>
               {partnerUsername && (
+                <>
                 <p className="text-sm text-[#71767b]">@{partnerUsername}</p>
+                
+                <p className="text-sm text-[#71767b]">
+                  {isConnected? "Connected" : "Connecting or disconnected"}
+                </p>
+                </>
               )}
             </div>
           </div>

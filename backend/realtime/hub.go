@@ -7,7 +7,7 @@ import (
 
 type Hub struct {
 	//lock that protects shared data.
-	mu sync.RWMutex
+	mu sync.Mutex
 	//stores websocket clients grouped by chat id
 	byChat map[string]map[*Client]struct{}
 }
@@ -48,7 +48,7 @@ func (h *Hub) Unregister(client *Client) {
 func (h *Hub) Broadcast(chatID string, message models.Message) {
 	var slowClients []*Client
 
-	h.mu.RLock()
+	h.mu.Lock()
 	for client := range h.byChat[chatID] {
 		select {
 		case client.Outbound <- message:
@@ -56,7 +56,7 @@ func (h *Hub) Broadcast(chatID string, message models.Message) {
 			slowClients = append(slowClients, client)
 		}
 	}
-	h.mu.RUnlock()
+	h.mu.Unlock()
 
 	for _, client := range slowClients {
 		h.Unregister(client)

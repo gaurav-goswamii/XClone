@@ -8,8 +8,9 @@ import (
 	"backend/service"
 	"backend/utils"
 	"backend/realtime"
-	// "os"
-	// "github.com/gorilla/websocket"
+	"os"
+	"github.com/gorilla/websocket"
+	"log"
 )
 
 const maxChatBodyBytes = 16 << 10
@@ -91,6 +92,63 @@ func (c *ChatController) ChatsHandler(w http.ResponseWriter, r *http.Request) {
 			"chat": chat,
 		},
 	})
+}
+
+var chatUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		allowedOrigin := os.Getenv("FRONTEND_ORIGIN")
+		if allowedOrigin == "" {
+			allowedOrigin = "http://localhost:3000"
+		}
+
+		return origin == allowedOrigin
+	},
+}
+
+func (c *ChatController) ChatWebSocketHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	claims, ok := c.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	chatID := strings.TrimSpace(r.PathValue("id"))
+	if chatID == "" {
+		writeError(w, http.StatusBadRequest, "chat id is required")
+		return
+	}
+
+	if _,err := c.chatService.GetChat(claims.UserID, chatID); err != nil {
+		writeChatError(w, err, "failed to open chat")
+		return
+	}
+
+	conn, err := chatUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+
+	onMessage := func(_ *realtime.Client, payload []byte) {
+		var req SendMessageRequest
+
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("invalid websocket for the chat %s: %v", chatID, err)
+			return
+		}
+
+		_, err := c.chatService.SendMessage(claims.UserID, chatID, req.Content)
+		if err != nil {
+			log.Printf("failed to send websocket for chat %s: %v", chatID, err)
+		}
+	}
+
+	client := realtime.NewClient(c.hub, chatID, conn, onMessage)
+	client.Run()
 }
 
 func writeChatError(w http.ResponseWriter, err error, fallback string) {
